@@ -15,18 +15,14 @@
  */
 package io.smallrye.openapi.runtime.scanner;
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayDeque;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.validation.constraints.NotNull;
-
+import io.smallrye.openapi.api.OpenApiConstants;
+import io.smallrye.openapi.api.models.media.SchemaImpl;
+import io.smallrye.openapi.runtime.util.JandexUtil;
+import io.smallrye.openapi.runtime.util.SchemaFactory;
+import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -36,11 +32,14 @@ import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 
-import io.smallrye.openapi.api.OpenApiConstants;
-import io.smallrye.openapi.api.models.media.SchemaImpl;
-import io.smallrye.openapi.runtime.util.JandexUtil;
-import io.smallrye.openapi.runtime.util.SchemaFactory;
-import io.smallrye.openapi.runtime.util.TypeUtil;
+import javax.validation.constraints.NotNull;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Explores the class graph from the provided root, creating an OpenAPI {@link Schema}
@@ -193,7 +192,7 @@ public class OpenApiDataObjectScanner {
 
         // If top level is a special item, we need to skip search else it'll try to index fields
         // Embedded special items are handled ok.
-        PathEntry root = PathEntry.rootNode(rootClassType, rootClassInfo, rootSchema);
+        PathEntry root = PathEntry.rootNode(rootClassType, null, rootClassInfo, rootSchema);
 
         // For certain special types (map, list, etc) we need to do some pre-processing.
         if (isSpecialType(rootClassType)) {
@@ -227,9 +226,8 @@ public class OpenApiDataObjectScanner {
             for (Map.Entry<FieldInfo, TypeResolver> entry : allFields.entrySet()) {
                 FieldInfo field = entry.getKey();
                 TypeResolver resolver = entry.getValue();
-                if (!Modifier.isStatic(field.flags())) {
+                if (!Modifier.isStatic(field.flags()) && !TypeUtil.isIgnore(field, currentPathEntry)) {
                     //LOG.tracev("Iterating field {0}", field);
-
                     processField(field,
                             resolver,
                             currentSchema,
@@ -264,10 +262,10 @@ public class OpenApiDataObjectScanner {
 
         if (schemaAnno != null) {
             // 1. Handle field annotated with @Schema.
-            return readSchemaAnnotatedField(schemaAnno, type.name().toString(), type, typeResolver, parentSchema, fieldSchema, currentPathEntry);
+            return readSchemaAnnotatedField(null, schemaAnno, type.name().toString(), type, typeResolver, parentSchema, fieldSchema, currentPathEntry);
         } else {
             // 2. Handle unannotated field and just do simple inference.
-            readUnannotatedField(typeResolver, type, fieldSchema, currentPathEntry);
+            readUnannotatedField(null, typeResolver, type, fieldSchema, currentPathEntry);
             // Unannotated won't result in substitution, so just return field schema.
             return fieldSchema;
         }
@@ -281,16 +279,25 @@ public class OpenApiDataObjectScanner {
 
         if (schemaAnno != null) {
             // 1. Handle field annotated with @Schema.
-            return readSchemaAnnotatedField(schemaAnno, field.name(), field.type(), typeResolver, parentSchema, fieldSchema, currentPathEntry);
+            return readSchemaAnnotatedField(
+                    field,
+                    schemaAnno,
+                    field.name(),
+                    field.type(),
+                    typeResolver,
+                    parentSchema,
+                    fieldSchema,
+                    currentPathEntry);
         } else {
             // 2. Handle unannotated field and just do simple inference.
-            readUnannotatedField(typeResolver, field.type(), fieldSchema, currentPathEntry);
+            readUnannotatedField(field, typeResolver, field.type(), fieldSchema, currentPathEntry);
             // Unannotated won't result in substitution, so just return field schema.
             return fieldSchema;
         }
     }
 
-    private Schema readSchemaAnnotatedField(AnnotationInstance annotation,
+    private Schema readSchemaAnnotatedField(AnnotationTarget fieldInfo,
+                                            AnnotationInstance annotation,
                                             String name,
                                             Type type,
                                             TypeResolver typeResolver,
@@ -316,7 +323,7 @@ public class OpenApiDataObjectScanner {
         }
 
         // Type could be replaced (e.g. generics).
-        Type postProcessedField = processType(type, typeResolver, schema, pathEntry);
+        Type postProcessedField = processType(fieldInfo, type, typeResolver, schema, pathEntry);
 
         // TypeFormat pair contains mappings for Java <-> OAS types and formats.
         TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(postProcessedField);
@@ -328,7 +335,7 @@ public class OpenApiDataObjectScanner {
         return SchemaFactory.readSchema(index, schema, annotation, overrides);
     }
 
-    private Type processType(Type fieldType, TypeResolver typeResolver, Schema schema, PathEntry pathEntry) {
+    private Type processType(AnnotationTarget annotationTarget, Type fieldType, TypeResolver typeResolver, Schema schema, PathEntry pathEntry) {
         // If it's a terminal type.
         if (isTerminalType(fieldType)) {
             return fieldType;
@@ -357,7 +364,7 @@ public class OpenApiDataObjectScanner {
             // If it's not a terminal type, then push for later inspection.
             if (!isTerminalType(arrayType.component()) && indexContains(fieldType)) {
                 ClassInfo klazz = getClassByName(fieldType);
-                pushPathPair(pathEntry, fieldType, klazz, arrSchema);
+                pushPathPair(annotationTarget, pathEntry, fieldType, klazz, arrSchema);
             }
             return arrayType;
         }
@@ -378,13 +385,13 @@ public class OpenApiDataObjectScanner {
 
         if (fieldType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
             // Parameterised type (e.g. Foo<A, B>)
-            return readParamType(pathEntry, schema, fieldType.asParameterizedType(), typeResolver);
+            return readParamType(annotationTarget, pathEntry, schema, fieldType.asParameterizedType(), typeResolver);
         }
 
         if (fieldType.kind() == Type.Kind.TYPE_VARIABLE ||
                 fieldType.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE) {
             // Resolve type variable to real variable.
-            return resolveTypeVariable(typeResolver, schema, pathEntry, fieldType);
+            return resolveTypeVariable(annotationTarget, typeResolver, schema, pathEntry, fieldType);
         }
 
         // Raw Collection
@@ -399,7 +406,7 @@ public class OpenApiDataObjectScanner {
 
         // Simple case: bare class or primitive type.
         if (indexContains(fieldType)) {
-            pushFieldToPath(pathEntry, fieldType, schema);
+            pushFieldToPath(annotationTarget, pathEntry, fieldType, schema);
         } else {
             // If the type is not in Jandex then we don't have easy access to it.
             // Future work could consider separate code to traverse classes reachable from this classloader.
@@ -410,7 +417,7 @@ public class OpenApiDataObjectScanner {
         return fieldType;
     }
 
-    private Type resolveTypeVariable(TypeResolver typeResolver, Schema schema, PathEntry pathEntry, Type fieldType) {
+    private Type resolveTypeVariable(AnnotationTarget fieldInfo, TypeResolver typeResolver, Schema schema, PathEntry pathEntry, Type fieldType) {
         // Type variable (e.g. A in Foo<A>)
         Type resolvedType = typeResolver.getResolvedType(fieldType);
 
@@ -426,7 +433,7 @@ public class OpenApiDataObjectScanner {
             if (indexContains(resolvedType)) {
                 // Look up the resolved type.
                 ClassInfo klazz = getClassByName(resolvedType);
-                PathEntry entry = PathEntry.leafNode(pathEntry, klazz, resolvedType, schema);
+                PathEntry entry = PathEntry.leafNode(pathEntry, fieldInfo, klazz, resolvedType, schema);
                 path.push(entry);
             } else {
                 //LOG.debugv("Class for type {0} not available", resolvedType);
@@ -435,7 +442,8 @@ public class OpenApiDataObjectScanner {
         return resolvedType;
     }
 
-    private void readUnannotatedField(TypeResolver typeResolver,
+    private void readUnannotatedField(AnnotationTarget field,
+                                      TypeResolver typeResolver,
                                       Type type,
                                       Schema schema,
                                       PathEntry pathEntry) {
@@ -446,7 +454,7 @@ public class OpenApiDataObjectScanner {
 
         //LOG.debugv("Processing unannotated field {0}", type);
 
-        Type processedType = processType(type, typeResolver, schema, pathEntry);
+        Type processedType = processType(field, type, typeResolver, schema, pathEntry);
 
         TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(processedType);
         schema.setType(typeFormat.getSchemaType());
@@ -456,7 +464,8 @@ public class OpenApiDataObjectScanner {
         }
     }
 
-    private Type readParamType(PathEntry pathEntry,
+    private Type readParamType(AnnotationTarget fieldInfo,
+                PathEntry pathEntry,
                                Schema schema,
                                ParameterizedType pType,
                                TypeResolver typeResolver) {
@@ -479,13 +488,13 @@ public class OpenApiDataObjectScanner {
             } else if (arg.kind() == Type.Kind.TYPE_VARIABLE ||
                     arg.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE ||
                     arg.kind() == Type.Kind.WILDCARD_TYPE) {
-                Type resolved = resolveTypeVariable(typeResolver, arraySchema, pathEntry, arg);
+                Type resolved = resolveTypeVariable(fieldInfo, typeResolver, arraySchema, pathEntry, arg);
                 if (indexContains(resolved)) {
                     arraySchema.type(Schema.SchemaType.OBJECT);
                 }
             } else if (indexContains(arg)) {
                 arraySchema.type(Schema.SchemaType.OBJECT);
-                pushFieldToPath(pathEntry, arg, arraySchema);
+                pushFieldToPath(fieldInfo, pathEntry, arg, arraySchema);
             }
             return ARRAY_TYPE_OBJECT; // Representing collection as JSON array
         } else if (isA(pType, MAP_TYPE)) {
@@ -502,13 +511,13 @@ public class OpenApiDataObjectScanner {
                 } else if (valueType.kind() == Type.Kind.TYPE_VARIABLE ||
                         valueType.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE ||
                         valueType.kind() == Type.Kind.WILDCARD_TYPE) {
-                    Type resolved = resolveTypeVariable(typeResolver, propsSchema, pathEntry, valueType);
+                    Type resolved = resolveTypeVariable(fieldInfo, typeResolver, propsSchema, pathEntry, valueType);
                     if (indexContains(resolved)) {
                         propsSchema.type(Schema.SchemaType.OBJECT);
                     }
                 } else if (indexContains(valueType)) {
                     propsSchema.type(Schema.SchemaType.OBJECT);
-                    pushFieldToPath(pathEntry, valueType, propsSchema);
+                    pushFieldToPath(fieldInfo, pathEntry, valueType, propsSchema);
                 }
                 schema.additionalProperties(propsSchema);
             }
@@ -518,24 +527,26 @@ public class OpenApiDataObjectScanner {
             ClassInfo klazz = getClassByName(pType);
             // Build mapping of class's type variables (e.g. A, B) to resolved variables
             // Resolved variables could be any type (e.g. String, another param type, etc)
-            PathEntry pair = new PathEntry(pathEntry, klazz, pType, schema);
+            PathEntry pair = new PathEntry(pathEntry, fieldInfo, klazz, pType, schema);
             path.push(pair);
             return pType;
         }
     }
 
-    private void pushFieldToPath(PathEntry parentPathEntry,
+    private void pushFieldToPath(AnnotationTarget annotationTarget,
+                                 PathEntry parentPathEntry,
                                  Type type,
                                  Schema schema) {
         ClassInfo klazzInfo = getClassByName(type);
-        pushPathPair(parentPathEntry, type, klazzInfo, schema);
+        pushPathPair(annotationTarget, parentPathEntry, type, klazzInfo, schema);
     }
 
-    private void pushPathPair(@NotNull PathEntry parentPathEntry,
+    private void pushPathPair(AnnotationTarget annotationTarget,
+                            @NotNull PathEntry parentPathEntry,
                               @NotNull Type type,
                               @NotNull ClassInfo klazzInfo,
                               @NotNull Schema schema) {
-        PathEntry entry = PathEntry.leafNode(parentPathEntry, klazzInfo, type, schema);
+        PathEntry entry = PathEntry.leafNode(parentPathEntry, annotationTarget, klazzInfo, type, schema);
         if (parentPathEntry.hasParent(entry)) {
             // Cycle detected, don't push path.
             //LOG.debugv("Possible cycle was detected at: {0}. Will not search further.", klazzInfo);
@@ -586,31 +597,35 @@ public class OpenApiDataObjectScanner {
     }
 
     // Needed for non-recursive DFS to keep schema and class together.
-    private static final class PathEntry {
+    public static final class PathEntry {
         private final PathEntry enclosing;
         private final Type clazzType;
         private final ClassInfo clazz;
         private final Schema schema;
+        public final AnnotationTarget annotationTarget;
 
         PathEntry(PathEntry enclosing,
+                  AnnotationTarget annotationTarget,
                   ClassInfo clazz,
                   @NotNull Type clazzType,
                   @NotNull Schema schema) {
             this.enclosing = enclosing;
+            this.annotationTarget = annotationTarget;
             this.clazz = clazz;
             this.clazzType = clazzType;
             this.schema = schema;
         }
 
-        static PathEntry rootNode(Type classType, ClassInfo classInfo, Schema rootSchema) {
-            return new PathEntry(null, classInfo, classType, rootSchema);
+        static PathEntry rootNode(Type classType, AnnotationTarget annotationTarget, ClassInfo classInfo, Schema rootSchema) {
+            return new PathEntry(null, annotationTarget, classInfo, classType, rootSchema);
         }
 
         static PathEntry leafNode(PathEntry parentNode,
+                                  AnnotationTarget annotationTarget,
                                   ClassInfo classInfo,
                                   Type classType,
                                   Schema rootSchema) {
-            return new PathEntry(parentNode, classInfo, classType, rootSchema);
+            return new PathEntry(parentNode, annotationTarget, classInfo, classType, rootSchema);
         }
 
         boolean hasParent(PathEntry candidate) {
@@ -658,4 +673,25 @@ public class OpenApiDataObjectScanner {
 //                    ", parent=" + (enclosing != null ? enclosing.toStringWithGraph() : "<root>") + "}";
 //        }
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
