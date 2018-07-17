@@ -98,6 +98,7 @@ public class OpenApiDataObjectScanner {
     private Schema rootSchema;
     private final TypeUtil.TypeWithFormat classTypeFormat;
     private final Deque<PathEntry> path = new ArrayDeque<>();
+    private final IgnoreResolver ignoreResolver;
 
     /**
      * Constructor for data object scanner.
@@ -109,6 +110,7 @@ public class OpenApiDataObjectScanner {
      */
     public OpenApiDataObjectScanner(IndexView index, Type classType) {
         this.index = index;
+        this.ignoreResolver = new IgnoreResolver(index);
         this.rootClassType = classType;
         this.classTypeFormat = TypeUtil.getTypeFormat(classType);
         this.rootSchema = new SchemaImpl();
@@ -226,7 +228,8 @@ public class OpenApiDataObjectScanner {
             for (Map.Entry<FieldInfo, TypeResolver> entry : allFields.entrySet()) {
                 FieldInfo field = entry.getKey();
                 TypeResolver resolver = entry.getValue();
-                if (!Modifier.isStatic(field.flags()) && !TypeUtil.isIgnore(field, currentPathEntry)) {
+                // Ignore static fields and fields annotated with ignore.
+                if (!Modifier.isStatic(field.flags()) && !ignoreResolver.isIgnore(field, currentPathEntry)) {
                     //LOG.tracev("Iterating field {0}", field);
                     processField(field,
                             resolver,

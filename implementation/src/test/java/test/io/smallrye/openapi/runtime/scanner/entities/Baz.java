@@ -15,13 +15,11 @@
  */
 package test.io.smallrye.openapi.runtime.scanner.entities;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreType;
-
 /**
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
  */
 @SuppressWarnings("unused")
-@JsonIgnoreType
+//@JsonIgnoreType(value=true)
 public class Baz {
     private int an_integer_value = 123;
 }

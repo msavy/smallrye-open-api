@@ -13,6 +13,7 @@
 
 package test.io.smallrye.openapi.runtime.scanner.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 
 /**
@@ -36,11 +37,13 @@ public class KitchenSink {
 //    //int[][] array2d;
 
     // Handle arrays
-//    @Schema(required = true)
-//    @JsonIgnoreProperties({"theQ"})
-//    Bar[] fooArray = new Bar[2];
+    //@Schema(required = true)
+    @JsonIgnoreProperties({"theQ"})
+    Bar[] fooArray = new Bar[2];
 
-    Baz thisTypeShouldBeIgnored;
+    //Baz thisTypeShouldBeIgnored;
+
+    //Bar bar;
 
 //
 //    TimerTask[] rawArray = new TimerTask[2];
