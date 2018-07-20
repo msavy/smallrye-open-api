@@ -81,7 +81,7 @@ public class IgnoreResolver {
                 // First look at declaring class for @JsonIgnoreProperties
                 // Then look at enclosing type.
                 FieldInfo field = target.asField();
-                return declaringClassIgnore(field) || nestingFieldIgnore(parentPathEntry.getAnnotationTarget(), field.name());
+                return declaringClassIgnore(field) || nestingFieldIgnore(parentPathEntry.getAnnotationInstance(), field.name());
             }
             return false;
         }
@@ -108,11 +108,11 @@ public class IgnoreResolver {
         //   String ignoreMe; // Ignored during scan via A.
         //   String doNotIgnoreMe;
         // }
-        private boolean nestingFieldIgnore(AnnotationTarget nesting, String fieldName) {
+        private boolean nestingFieldIgnore(AnnotationInstance nesting, String fieldName) {
             if (nesting == null) {
                 return false;
             }
-            AnnotationInstance nestedTypeJIP = TypeUtil.getAnnotation(nesting, getName());
+            AnnotationInstance nestedTypeJIP = TypeUtil.getAnnotation(nesting.target(), getName());
             return shouldIgnoreTarget(nestedTypeJIP, fieldName);
         }
 

@@ -15,16 +15,14 @@
  */
 package io.smallrye.openapi.runtime.scanner;
 
-import io.smallrye.openapi.api.OpenApiConstants;
 import io.smallrye.openapi.api.models.media.SchemaImpl;
 import io.smallrye.openapi.runtime.scanner.indexwrapper.DataObjectDeque;
+import io.smallrye.openapi.runtime.scanner.indexwrapper.FieldProcessor;
 import io.smallrye.openapi.runtime.scanner.indexwrapper.WrappedIndexView;
-import io.smallrye.openapi.runtime.util.JandexUtil;
 import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -37,7 +35,6 @@ import org.jboss.jandex.Type;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -76,27 +73,28 @@ public class OpenApiDataObjectScanner {
 
     //    private static final Logger LOG = Logger.getLogger(OpenApiDataObjectScanner.class);
     // Object
-    private static final Type OBJECT_TYPE = Type.create(DotName.createSimple(java.lang.Object.class.getName()), Type.Kind.CLASS);
+    public static final Type OBJECT_TYPE = Type.create(DotName.createSimple(java.lang.Object.class.getName()), Type.Kind.CLASS);
     // Collection (list-type things)
-    private static final DotName COLLECTION_INTERFACE_NAME = DotName.createSimple(Collection.class.getName());
-    private static final Type COLLECTION_TYPE = Type.create(COLLECTION_INTERFACE_NAME, Type.Kind.CLASS);
+    public static final DotName COLLECTION_INTERFACE_NAME = DotName.createSimple(Collection.class.getName());
+    public static final Type COLLECTION_TYPE = Type.create(COLLECTION_INTERFACE_NAME, Type.Kind.CLASS);
     // Map
-    private static final DotName MAP_INTERFACE_NAME = DotName.createSimple(Map.class.getName());
-    private static final Type MAP_TYPE = Type.create(MAP_INTERFACE_NAME, Type.Kind.CLASS);
+    public static final DotName MAP_INTERFACE_NAME = DotName.createSimple(Map.class.getName());
+    public static final Type MAP_TYPE = Type.create(MAP_INTERFACE_NAME, Type.Kind.CLASS);
     // Enum
-    private static final DotName ENUM_INTERFACE_NAME = DotName.createSimple(Enum.class.getName());
-    private static final Type ENUM_TYPE = Type.create(ENUM_INTERFACE_NAME, Type.Kind.CLASS);
+    public static final DotName ENUM_INTERFACE_NAME = DotName.createSimple(Enum.class.getName());
+    public static final Type ENUM_TYPE = Type.create(ENUM_INTERFACE_NAME, Type.Kind.CLASS);
     // String type
-    private static final Type STRING_TYPE = Type.create(DotName.createSimple(String.class.getName()), Type.Kind.CLASS);
+    public static final Type STRING_TYPE = Type.create(DotName.createSimple(String.class.getName()), Type.Kind.CLASS);
     // Array type
-    private static final Type ARRAY_TYPE_OBJECT = ArrayType.create(DotName.createSimple("[Ljava.lang.Object;"), Type.Kind.ARRAY);
+    public static final Type ARRAY_TYPE_OBJECT = ArrayType.create(DotName.createSimple("[Ljava.lang.Object;"), Type.Kind.ARRAY);
 
     private Schema rootSchema;
-    private final WrappedIndexView index;
-    private final DataObjectDeque path;
     private final Type rootClassType;
     private final ClassInfo rootClassInfo;
-    private final TypeUtil.TypeWithFormat classTypeFormat;
+    private final TypeUtil.TypeWithFormat rootClassTypeFormat;
+
+    private final WrappedIndexView index;
+    private final DataObjectDeque path;
     private final IgnoreResolver ignoreResolver;
 
     /**
@@ -112,7 +110,7 @@ public class OpenApiDataObjectScanner {
         this.path = new DataObjectDeque(index);
         this.ignoreResolver = new IgnoreResolver(index);
         this.rootClassType = classType;
-        this.classTypeFormat = TypeUtil.getTypeFormat(classType);
+        this.rootClassTypeFormat = TypeUtil.getTypeFormat(classType);
         this.rootSchema = new SchemaImpl();
         this.rootClassInfo = initialType(classType);
     }
@@ -181,8 +179,8 @@ public class OpenApiDataObjectScanner {
         // If top level item is simple
         if (isTerminalType(rootClassType)) {
             SchemaImpl simpleSchema = new SchemaImpl();
-            simpleSchema.setType(classTypeFormat.getSchemaType());
-            simpleSchema.setFormat(classTypeFormat.getFormat().format());
+            simpleSchema.setType(rootClassTypeFormat.getSchemaType());
+            simpleSchema.setFormat(rootClassTypeFormat.getFormat().format());
             return simpleSchema;
         }
 
@@ -217,7 +215,9 @@ public class OpenApiDataObjectScanner {
             Type currentType = currentPathEntry.getClazzType();
 
             // First, handle class annotations.
-            currentSchema = readKlass(currentClass, currentSchema);
+            //currentSchema = readKlass(currentClass, currentSchema);
+            // TODO is this necessary any more?
+            currentPathEntry.setSchema(readKlass(currentClass, currentSchema));
 
             //LOG.debugv("Getting all fields for: {0} in class: {1}", currentType, currentClass);
 
@@ -231,10 +231,11 @@ public class OpenApiDataObjectScanner {
                 // Ignore static fields and fields annotated with ignore.
                 if (!Modifier.isStatic(field.flags()) && !ignoreResolver.isIgnore(field, currentPathEntry)) {
                     //LOG.tracev("Iterating field {0}", field);
-                    processField(field,
-                            resolver,
-                            currentSchema,
-                            currentPathEntry);
+//                    processField(field,
+//                            resolver,
+//                            currentSchema,
+//                            currentPathEntry);
+                    FieldProcessor.process(index, path, resolver, currentPathEntry, field);
                 }
             }
 
@@ -265,277 +266,287 @@ public class OpenApiDataObjectScanner {
 
         if (schemaAnno != null) {
             // 1. Handle field annotated with @Schema.
-            return readSchemaAnnotatedField(null, schemaAnno, type.name().toString(), type, typeResolver, parentSchema, fieldSchema, currentPathEntry);
+            //return readSchemaAnnotatedField(null, schemaAnno, type.name().toString(), type, typeResolver, parentSchema, fieldSchema, currentPathEntry);
+
+            //return FieldProcessor.process(index, path, typeResolver, currentPathEntry, type);
+
+
         } else {
             // 2. Handle unannotated field and just do simple inference.
-            readUnannotatedField(null, typeResolver, type, fieldSchema, currentPathEntry);
+            //readUnannotatedField(null, typeResolver, type, fieldSchema, currentPathEntry);
+
+
+
+
             // Unannotated won't result in substitution, so just return field schema.
             return fieldSchema;
         }
+
+        return fieldSchema;
     }
+//
+//    private Schema _processField(FieldInfo fieldInfo, TypeResolver typeResolver, Schema parentSchema, DataObjectDeque.PathEntry currentPathEntry) {
+//        Schema fieldSchema = new SchemaImpl();
+//        parentSchema.addProperty(fieldInfo.name(), fieldSchema);
+//
+//        AnnotationInstance schemaAnno = TypeUtil.getSchemaAnnotation(fieldInfo);
+//
+//        if (schemaAnno != null) {
+//            // 1. Handle field annotated with @Schema.
+//            return readSchemaAnnotatedField(
+//                    fieldInfo,
+//                    schemaAnno,
+//                    fieldInfo.name(),
+//                    fieldInfo.type(),
+//                    typeResolver,
+//                    parentSchema,
+//                    fieldSchema,
+//                    currentPathEntry);
+//        } else {
+//            // 2. Handle unannotated field and just do simple inference.
+//            readUnannotatedField(fieldInfo, typeResolver, fieldInfo.type(), fieldSchema, currentPathEntry);
+//            // Unannotated won't result in substitution, so just return field schema.
+//            return fieldSchema;
+//        }
+//    }
 
-    private Schema processField(FieldInfo fieldInfo, TypeResolver typeResolver, Schema parentSchema, DataObjectDeque.PathEntry currentPathEntry) {
-        Schema fieldSchema = new SchemaImpl();
-        parentSchema.addProperty(fieldInfo.name(), fieldSchema);
+//    private Schema readSchemaAnnotatedField(AnnotationTarget fieldInfo,
+//                                            AnnotationInstance annotation,
+//                                            String name,
+//                                            Type type,
+//                                            TypeResolver typeResolver,
+//                                            Schema parent,
+//                                            Schema schema,
+//                                            DataObjectDeque.PathEntry pathEntry) {
+//        if (annotation == null) {
+//            return parent;
+//        }
+//
+//        //LOG.debugv("Processing @Schema annotation {0} on a field {1}", annotation, name);
+//
+//        // Schemas can be hidden. Skip if that's the case.
+//        Boolean isHidden = JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_HIDDEN);
+//        if (isHidden != null && isHidden == Boolean.TRUE) {
+//            return parent;
+//        }
+//
+//        // If "required" attribute is on field. It should be applied to the *parent* schema.
+//        // Required is false by default.
+//        if (JandexUtil.booleanValueWithDefault(annotation, OpenApiConstants.PROP_REQUIRED)) {
+//            parent.addRequired(name);
+//        }
+//
+//        // Type could be replaced (e.g. generics).
+//        Type postProcessedField = processType(fieldInfo, type, typeResolver, schema, pathEntry);
+//
+//        // TypeFormat pair contains mappings for Java <-> OAS types and formats.
+//        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(postProcessedField);
+//
+//        // Provide inferred type and format if relevant.
+//        Map<String, Object> overrides = new HashMap<>();
+//        overrides.put(OpenApiConstants.PROP_TYPE, typeFormat.getSchemaType());
+//        overrides.put(OpenApiConstants.PROP_FORMAT, typeFormat.getFormat().format());
+//        return SchemaFactory.readSchema(index, schema, annotation, overrides);
+//    }
 
-        AnnotationInstance schemaAnno = TypeUtil.getSchemaAnnotation(fieldInfo);
+//    private Type processType(AnnotationTarget annotationTarget, Type fieldType, TypeResolver typeResolver, Schema schema, DataObjectDeque.PathEntry pathEntry) {
+//        // If it's a terminal type.
+//        if (isTerminalType(fieldType)) {
+//            return fieldType;
+//        }
+//
+//        if (fieldType.kind() == Type.Kind.WILDCARD_TYPE) {
+//            fieldType = TypeUtil.resolveWildcard(fieldType.asWildcardType());
+//        }
+//
+//        if (fieldType.kind() == Type.Kind.ARRAY) {
+//            //LOG.debugv("Processing an array {0}", fieldType);
+//            ArrayType arrayType = fieldType.asArrayType();
+//
+//            // TODO handle multi-dimensional arrays.
+//
+//            // Array-type schema
+//            SchemaImpl arrSchema = new SchemaImpl();
+//            schema.type(Schema.SchemaType.ARRAY);
+//            schema.items(arrSchema);
+//
+//            // Only use component (excludes the special name formatting for arrays).
+//            TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(arrayType.component());
+//            arrSchema.setType(typeFormat.getSchemaType());
+//            arrSchema.setFormat(typeFormat.getFormat().format());
+//
+//            // If it's not a terminal type, then push for later inspection.
+//            if (!isTerminalType(arrayType.component()) && index.containsClass(fieldType)) {
+//                ClassInfo klazz = index.getClass(fieldType);
+//                path.pushPathPair(annotationTarget, pathEntry, fieldType, klazz, arrSchema);
+//            }
+//            return arrayType;
+//        }
+//
+//        if (isA(fieldType, ENUM_TYPE) && index.containsClass(fieldType)) {
+//            //LOG.debugv("Processing an enum {0}", fieldType);
+//            ClassInfo enumKlazz = index.getClass(fieldType);
+//
+//            for (FieldInfo enumField : enumKlazz.fields()) {
+//                // Ignore the hidden enum array as it's not accessible. Add fields that look like enums (of type enumKlazz)
+//                // NB: Eclipse compiler and OpenJDK compiler have different names for this field.
+//                if (!enumField.name().endsWith("$VALUES") && TypeUtil.getName(enumField.type()).equals(enumKlazz.name())) {
+//                    // Enum's value fields.
+//                    schema.addEnumeration(enumField.name());
+//                }
+//            }
+//            return STRING_TYPE;
+//        }
+//
+//        if (fieldType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
+//            // Parameterised type (e.g. Foo<A, B>)
+//            return readParamType(annotationTarget, pathEntry, schema, fieldType.asParameterizedType(), typeResolver);
+//        }
+//
+//        if (fieldType.kind() == Type.Kind.TYPE_VARIABLE ||
+//                fieldType.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE) {
+//            // Resolve type variable to real variable.
+//            return resolveTypeVariable(annotationTarget, typeResolver, schema, pathEntry, fieldType);
+//        }
+//
+//        // Raw Collection
+//        if (isA(fieldType, COLLECTION_TYPE)) {
+//            return ARRAY_TYPE_OBJECT;
+//        }
+//
+//        // Raw Map
+//        if (isA(fieldType, MAP_TYPE)) {
+//            return OBJECT_TYPE;
+//        }
+//
+//        // Simple case: bare class or primitive type.
+//        if (index.containsClass(fieldType)) {
+//            path.pushField(annotationTarget, pathEntry, fieldType, schema);
+//        } else {
+//            // If the type is not in Jandex then we don't have easy access to it.
+//            // Future work could consider separate code to traverse classes reachable from this classloader.
+////            LOG.debugv("Encountered type not in Jandex index that is not well-known type. " +
+////                    "Will not traverse it: {0}", fieldType);
+//        }
+//
+//        return fieldType;
+//    }
 
-        if (schemaAnno != null) {
-            // 1. Handle field annotated with @Schema.
-            return readSchemaAnnotatedField(
-                    fieldInfo,
-                    schemaAnno,
-                    fieldInfo.name(),
-                    fieldInfo.type(),
-                    typeResolver,
-                    parentSchema,
-                    fieldSchema,
-                    currentPathEntry);
-        } else {
-            // 2. Handle unannotated field and just do simple inference.
-            readUnannotatedField(fieldInfo, typeResolver, fieldInfo.type(), fieldSchema, currentPathEntry);
-            // Unannotated won't result in substitution, so just return field schema.
-            return fieldSchema;
-        }
-    }
+//    private Type resolveTypeVariable(AnnotationTarget fieldInfo, TypeResolver typeResolver, Schema schema, DataObjectDeque.PathEntry pathEntry, Type fieldType) {
+//        // Type variable (e.g. A in Foo<A>)
+//        Type resolvedType = typeResolver.getResolvedType(fieldType);
+//
+//        //LOG.debugv("Resolved type {0} -> {1}", fieldType, resolvedType);
+//        if (isTerminalType(resolvedType) || index.getClass(resolvedType) == null) {
+//            //LOG.tracev("Is a terminal type {0}", resolvedType);
+//            TypeUtil.TypeWithFormat replacement = TypeUtil.getTypeFormat(resolvedType);
+//            schema.setType(replacement.getSchemaType());
+//            schema.setFormat(replacement.getFormat().format());
+//        } else {
+//            //LOG.debugv("Attempting to do TYPE_VARIABLE substitution: {0} -> {1}", fieldType, resolvedType);
+//
+//            if (index.containsClass(resolvedType)) {
+//                // Look up the resolved type.
+//                ClassInfo klazz = index.getClass(resolvedType);
+//                DataObjectDeque.PathEntry entry = path.leafNode(pathEntry, fieldInfo, klazz, resolvedType, schema);
+//                path.push(entry);
+//            } else {
+//                //LOG.debugv("Class for type {0} not available", resolvedType);
+//            }
+//        }
+//        return resolvedType;
+//    }
 
-    private Schema readSchemaAnnotatedField(AnnotationTarget fieldInfo,
-                                            AnnotationInstance annotation,
-                                            String name,
-                                            Type type,
-                                            TypeResolver typeResolver,
-                                            Schema parent,
-                                            Schema schema,
-                                            DataObjectDeque.PathEntry pathEntry) {
-        if (annotation == null) {
-            return parent;
-        }
+//    private void readUnannotatedField(AnnotationTarget field,
+//                                      TypeResolver typeResolver,
+//                                      Type type,
+//                                      Schema schema,
+//                                      DataObjectDeque.PathEntry pathEntry) {
+//
+//        if (!shouldInferUnannotatedFields()) {
+//            return;
+//        }
+//
+//        //LOG.debugv("Processing unannotated field {0}", type);
+//
+//        Type processedType = processType(field, type, typeResolver, schema, pathEntry);
+//
+//        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(processedType);
+//        schema.setType(typeFormat.getSchemaType());
+//
+//        if (typeFormat.getFormat().hasFormat()) {
+//            schema.setFormat(typeFormat.getFormat().format());
+//        }
+//    }
 
-        //LOG.debugv("Processing @Schema annotation {0} on a field {1}", annotation, name);
-
-        // Schemas can be hidden. Skip if that's the case.
-        Boolean isHidden = JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_HIDDEN);
-        if (isHidden != null && isHidden == Boolean.TRUE) {
-            return parent;
-        }
-
-        // If "required" attribute is on field. It should be applied to the *parent* schema.
-        // Required is false by default.
-        if (JandexUtil.booleanValueWithDefault(annotation, OpenApiConstants.PROP_REQUIRED)) {
-            parent.addRequired(name);
-        }
-
-        // Type could be replaced (e.g. generics).
-        Type postProcessedField = processType(fieldInfo, type, typeResolver, schema, pathEntry);
-
-        // TypeFormat pair contains mappings for Java <-> OAS types and formats.
-        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(postProcessedField);
-
-        // Provide inferred type and format if relevant.
-        Map<String, Object> overrides = new HashMap<>();
-        overrides.put(OpenApiConstants.PROP_TYPE, typeFormat.getSchemaType());
-        overrides.put(OpenApiConstants.PROP_FORMAT, typeFormat.getFormat().format());
-        return SchemaFactory.readSchema(index, schema, annotation, overrides);
-    }
-
-    private Type processType(AnnotationTarget annotationTarget, Type fieldType, TypeResolver typeResolver, Schema schema, DataObjectDeque.PathEntry pathEntry) {
-        // If it's a terminal type.
-        if (isTerminalType(fieldType)) {
-            return fieldType;
-        }
-
-        if (fieldType.kind() == Type.Kind.WILDCARD_TYPE) {
-            fieldType = TypeUtil.resolveWildcard(fieldType.asWildcardType());
-        }
-
-        if (fieldType.kind() == Type.Kind.ARRAY) {
-            //LOG.debugv("Processing an array {0}", fieldType);
-            ArrayType arrayType = fieldType.asArrayType();
-
-            // TODO handle multi-dimensional arrays.
-
-            // Array-type schema
-            SchemaImpl arrSchema = new SchemaImpl();
-            schema.type(Schema.SchemaType.ARRAY);
-            schema.items(arrSchema);
-
-            // Only use component (excludes the special name formatting for arrays).
-            TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(arrayType.component());
-            arrSchema.setType(typeFormat.getSchemaType());
-            arrSchema.setFormat(typeFormat.getFormat().format());
-
-            // If it's not a terminal type, then push for later inspection.
-            if (!isTerminalType(arrayType.component()) && index.containsClass(fieldType)) {
-                ClassInfo klazz = index.getClass(fieldType);
-                path.pushPathPair(annotationTarget, pathEntry, fieldType, klazz, arrSchema);
-            }
-            return arrayType;
-        }
-
-        if (isA(fieldType, ENUM_TYPE) && index.containsClass(fieldType)) {
-            //LOG.debugv("Processing an enum {0}", fieldType);
-            ClassInfo enumKlazz = index.getClass(fieldType);
-
-            for (FieldInfo enumField : enumKlazz.fields()) {
-                // Ignore the hidden enum array as it's not accessible. Add fields that look like enums (of type enumKlazz)
-                // NB: Eclipse compiler and OpenJDK compiler have different names for this field.
-                if (!enumField.name().endsWith("$VALUES") && TypeUtil.getName(enumField.type()).equals(enumKlazz.name())) {
-                    // Enum's value fields.
-                    schema.addEnumeration(enumField.name());
-                }
-            }
-            return STRING_TYPE;
-        }
-
-        if (fieldType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
-            // Parameterised type (e.g. Foo<A, B>)
-            return readParamType(annotationTarget, pathEntry, schema, fieldType.asParameterizedType(), typeResolver);
-        }
-
-        if (fieldType.kind() == Type.Kind.TYPE_VARIABLE ||
-                fieldType.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE) {
-            // Resolve type variable to real variable.
-            return resolveTypeVariable(annotationTarget, typeResolver, schema, pathEntry, fieldType);
-        }
-
-        // Raw Collection
-        if (isA(fieldType, COLLECTION_TYPE)) {
-            return ARRAY_TYPE_OBJECT;
-        }
-
-        // Raw Map
-        if (isA(fieldType, MAP_TYPE)) {
-            return OBJECT_TYPE;
-        }
-
-        // Simple case: bare class or primitive type.
-        if (index.containsClass(fieldType)) {
-            path.pushField(annotationTarget, pathEntry, fieldType, schema);
-        } else {
-            // If the type is not in Jandex then we don't have easy access to it.
-            // Future work could consider separate code to traverse classes reachable from this classloader.
-//            LOG.debugv("Encountered type not in Jandex index that is not well-known type. " +
-//                    "Will not traverse it: {0}", fieldType);
-        }
-
-        return fieldType;
-    }
-
-    private Type resolveTypeVariable(AnnotationTarget fieldInfo, TypeResolver typeResolver, Schema schema, DataObjectDeque.PathEntry pathEntry, Type fieldType) {
-        // Type variable (e.g. A in Foo<A>)
-        Type resolvedType = typeResolver.getResolvedType(fieldType);
-
-        //LOG.debugv("Resolved type {0} -> {1}", fieldType, resolvedType);
-        if (isTerminalType(resolvedType) || index.getClass(resolvedType) == null) {
-            //LOG.tracev("Is a terminal type {0}", resolvedType);
-            TypeUtil.TypeWithFormat replacement = TypeUtil.getTypeFormat(resolvedType);
-            schema.setType(replacement.getSchemaType());
-            schema.setFormat(replacement.getFormat().format());
-        } else {
-            //LOG.debugv("Attempting to do TYPE_VARIABLE substitution: {0} -> {1}", fieldType, resolvedType);
-
-            if (index.containsClass(resolvedType)) {
-                // Look up the resolved type.
-                ClassInfo klazz = index.getClass(resolvedType);
-                DataObjectDeque.PathEntry entry = path.leafNode(pathEntry, fieldInfo, klazz, resolvedType, schema);
-                path.push(entry);
-            } else {
-                //LOG.debugv("Class for type {0} not available", resolvedType);
-            }
-        }
-        return resolvedType;
-    }
-
-    private void readUnannotatedField(AnnotationTarget field,
-                                      TypeResolver typeResolver,
-                                      Type type,
-                                      Schema schema,
-                                      DataObjectDeque.PathEntry pathEntry) {
-
-        if (!shouldInferUnannotatedFields()) {
-            return;
-        }
-
-        //LOG.debugv("Processing unannotated field {0}", type);
-
-        Type processedType = processType(field, type, typeResolver, schema, pathEntry);
-
-        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(processedType);
-        schema.setType(typeFormat.getSchemaType());
-
-        if (typeFormat.getFormat().hasFormat()) {
-            schema.setFormat(typeFormat.getFormat().format());
-        }
-    }
-
-    private Type readParamType(AnnotationTarget fieldInfo,
-                               DataObjectDeque.PathEntry pathEntry,
-                               Schema schema,
-                               ParameterizedType pType,
-                               TypeResolver typeResolver) {
-        //LOG.debugv("Processing parameterized type {0}", pType);
-
-        // If it's a collection, we should treat it as an array.
-        if (isA(pType, COLLECTION_TYPE)) { // TODO maybe also Iterable?
-            //LOG.debugv("Processing Java Collection. Will treat as an array.");
-            SchemaImpl arraySchema = new SchemaImpl();
-            schema.type(Schema.SchemaType.ARRAY);
-            schema.items(arraySchema);
-
-            // Should only have one arg for collection.
-            Type arg = pType.arguments().get(0);
-
-            if (isTerminalType(arg)) {
-                TypeUtil.TypeWithFormat terminalType = TypeUtil.getTypeFormat(arg);
-                arraySchema.type(terminalType.getSchemaType());
-                arraySchema.format(terminalType.getFormat().format());
-            } else if (arg.kind() == Type.Kind.TYPE_VARIABLE ||
-                    arg.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE ||
-                    arg.kind() == Type.Kind.WILDCARD_TYPE) {
-                Type resolved = resolveTypeVariable(fieldInfo, typeResolver, arraySchema, pathEntry, arg);
-                if (index.containsClass(resolved)) {
-                    arraySchema.type(Schema.SchemaType.OBJECT);
-                }
-            } else if (index.containsClass(arg)) {
-                arraySchema.type(Schema.SchemaType.OBJECT);
-                path.pushField(fieldInfo, pathEntry, arg, arraySchema);
-            }
-            return ARRAY_TYPE_OBJECT; // Representing collection as JSON array
-        } else if (isA(pType, MAP_TYPE)) {
-            //LOG.debugv("Processing Map. Will treat as an object.");
-            schema.type(Schema.SchemaType.OBJECT);
-
-            if (pType.arguments().size() == 2) {
-                Type valueType = pType.arguments().get(1);
-                SchemaImpl propsSchema = new SchemaImpl();
-                if (isTerminalType(valueType)) {
-                    TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(valueType);
-                    propsSchema.setType(tf.getSchemaType());
-                    propsSchema.setFormat(tf.getFormat().format());
-                } else if (valueType.kind() == Type.Kind.TYPE_VARIABLE ||
-                        valueType.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE ||
-                        valueType.kind() == Type.Kind.WILDCARD_TYPE) {
-                    Type resolved = resolveTypeVariable(fieldInfo, typeResolver, propsSchema, pathEntry, valueType);
-                    if (index.containsClass(resolved)) {
-                        propsSchema.type(Schema.SchemaType.OBJECT);
-                    }
-                } else if (index.containsClass(valueType)) {
-                    propsSchema.type(Schema.SchemaType.OBJECT);
-                    path.pushField(fieldInfo, pathEntry, valueType, propsSchema);
-                }
-                schema.additionalProperties(propsSchema);
-            }
-            return OBJECT_TYPE;
-        } else {
-            // This attempts to allow us to resolve the types generically.
-            ClassInfo klazz = index.getClass(pType);
-            // Build mapping of class's type variables (e.g. A, B) to resolved variables
-            // Resolved variables could be any type (e.g. String, another param type, etc)
-            DataObjectDeque.PathEntry pair = path.leafNode(pathEntry, fieldInfo, klazz, pType, schema);
-            path.push(pair);
-            return pType;
-        }
-    }
+//    private Type readParamType(AnnotationTarget fieldInfo,
+//                               DataObjectDeque.PathEntry pathEntry,
+//                               Schema schema,
+//                               ParameterizedType pType,
+//                               TypeResolver typeResolver) {
+//        //LOG.debugv("Processing parameterized type {0}", pType);
+//
+//        // If it's a collection, we should treat it as an array.
+//        if (isA(pType, COLLECTION_TYPE)) { // TODO maybe also Iterable?
+//            //LOG.debugv("Processing Java Collection. Will treat as an array.");
+//            SchemaImpl arraySchema = new SchemaImpl();
+//            schema.type(Schema.SchemaType.ARRAY);
+//            schema.items(arraySchema);
+//
+//            // Should only have one arg for collection.
+//            Type arg = pType.arguments().get(0);
+//
+//            if (isTerminalType(arg)) {
+//                TypeUtil.TypeWithFormat terminalType = TypeUtil.getTypeFormat(arg);
+//                arraySchema.type(terminalType.getSchemaType());
+//                arraySchema.format(terminalType.getFormat().format());
+//            } else if (arg.kind() == Type.Kind.TYPE_VARIABLE ||
+//                    arg.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE ||
+//                    arg.kind() == Type.Kind.WILDCARD_TYPE) {
+//                Type resolved = resolveTypeVariable(fieldInfo, typeResolver, arraySchema, pathEntry, arg);
+//                if (index.containsClass(resolved)) {
+//                    arraySchema.type(Schema.SchemaType.OBJECT);
+//                }
+//            } else if (index.containsClass(arg)) {
+//                arraySchema.type(Schema.SchemaType.OBJECT);
+//                path.pushField(fieldInfo, pathEntry, arg, arraySchema);
+//            }
+//            return ARRAY_TYPE_OBJECT; // Representing collection as JSON array
+//        } else if (isA(pType, MAP_TYPE)) {
+//            //LOG.debugv("Processing Map. Will treat as an object.");
+//            schema.type(Schema.SchemaType.OBJECT);
+//
+//            if (pType.arguments().size() == 2) {
+//                Type valueType = pType.arguments().get(1);
+//                SchemaImpl propsSchema = new SchemaImpl();
+//                if (isTerminalType(valueType)) {
+//                    TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(valueType);
+//                    propsSchema.setType(tf.getSchemaType());
+//                    propsSchema.setFormat(tf.getFormat().format());
+//                } else if (valueType.kind() == Type.Kind.TYPE_VARIABLE ||
+//                        valueType.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE ||
+//                        valueType.kind() == Type.Kind.WILDCARD_TYPE) {
+//                    Type resolved = resolveTypeVariable(fieldInfo, typeResolver, propsSchema, pathEntry, valueType);
+//                    if (index.containsClass(resolved)) {
+//                        propsSchema.type(Schema.SchemaType.OBJECT);
+//                    }
+//                } else if (index.containsClass(valueType)) {
+//                    propsSchema.type(Schema.SchemaType.OBJECT);
+//                    path.pushField(fieldInfo, pathEntry, valueType, propsSchema);
+//                }
+//                schema.additionalProperties(propsSchema);
+//            }
+//            return OBJECT_TYPE;
+//        } else {
+//            // This attempts to allow us to resolve the types generically.
+//            ClassInfo klazz = index.getClass(pType);
+//            // Build mapping of class's type variables (e.g. A, B) to resolved variables
+//            // Resolved variables could be any type (e.g. String, another param type, etc)
+//            DataObjectDeque.PathEntry pair = path.leafNode(pathEntry, fieldInfo, klazz, pType, schema);
+//            path.push(pair);
+//            return pType;
+//        }
+//    }
 
     private boolean isA(Type testSubject, Type test) {
         return TypeUtil.isA(index, testSubject, test);

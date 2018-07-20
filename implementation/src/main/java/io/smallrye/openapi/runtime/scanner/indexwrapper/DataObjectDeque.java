@@ -16,7 +16,7 @@
 package io.smallrye.openapi.runtime.scanner.indexwrapper;
 
 import org.eclipse.microprofile.openapi.models.media.Schema;
-import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Type;
 
@@ -56,20 +56,20 @@ public class DataObjectDeque {
         return path.pop();
     }
 
-    public void pushField(AnnotationTarget annotationTarget,
+    public void pushField(AnnotationInstance annotationInstance,
                                  PathEntry parentPathEntry,
                                  Type type,
                                  Schema schema) {
         ClassInfo klazzInfo = index.getClass(type);
-        pushPathPair(annotationTarget, parentPathEntry, type, klazzInfo, schema);
+        pushPathPair(annotationInstance, parentPathEntry, type, klazzInfo, schema);
     }
 
-    public void pushPathPair(AnnotationTarget annotationTarget,
+    public void pushPathPair(AnnotationInstance annotationInstance,
                               @NotNull PathEntry parentPathEntry,
                               @NotNull Type type,
                               @NotNull ClassInfo klazzInfo,
                               @NotNull Schema schema) {
-        PathEntry entry = leafNode(parentPathEntry, annotationTarget, klazzInfo, type, schema);
+        PathEntry entry = leafNode(parentPathEntry, annotationInstance, klazzInfo, type, schema);
         if (parentPathEntry.hasParent(entry)) {
             // Cycle detected, don't push path.
             //LOG.debugv("Possible cycle was detected at: {0}. Will not search further.", klazzInfo);
@@ -89,11 +89,11 @@ public class DataObjectDeque {
     }
 
     public PathEntry leafNode(PathEntry parentNode,
-                                     AnnotationTarget annotationTarget,
+                                     AnnotationInstance annotationInstance,
                                      ClassInfo classInfo,
                                      Type classType,
                                      Schema rootSchema) {
-        return new PathEntry(parentNode, annotationTarget, classInfo, classType, rootSchema);
+        return new PathEntry(parentNode, annotationInstance, classInfo, classType, rootSchema);
     }
 
     /**
@@ -102,17 +102,17 @@ public class DataObjectDeque {
     public static final class PathEntry {
         private final PathEntry enclosing;
         private final Type clazzType;
-        private final ClassInfo clazz;
-        private final Schema schema;
-        private final AnnotationTarget annotationTarget;
+        private final ClassInfo clazz; // TODO may be able to get rid of this?
+        private Schema schema;
+        private final AnnotationInstance annotationInstance;
 
         PathEntry(PathEntry enclosing,
-                  AnnotationTarget annotationTarget,
+                  AnnotationInstance annotationInstance,
                   ClassInfo clazz,
                   @NotNull Type clazzType,
                   @NotNull Schema schema) {
             this.enclosing = enclosing;
-            this.annotationTarget = annotationTarget;
+            this.annotationInstance = annotationInstance;
             this.clazz = clazz;
             this.clazzType = clazzType;
             this.schema = schema;
@@ -129,8 +129,8 @@ public class DataObjectDeque {
             return false;
         }
 
-        public AnnotationTarget getAnnotationTarget() {
-            return annotationTarget;
+        public AnnotationInstance getAnnotationInstance() {
+            return annotationInstance;
         }
 
         public PathEntry getEnclosing() {
@@ -147,6 +147,10 @@ public class DataObjectDeque {
 
         public Schema getSchema() {
             return schema;
+        }
+
+        public void setSchema(Schema schema) {
+            this.schema = schema;
         }
 
         @Override
