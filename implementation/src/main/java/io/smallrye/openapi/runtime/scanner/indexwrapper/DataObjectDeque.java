@@ -19,6 +19,7 @@ import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Type;
+import org.jboss.logging.Logger;
 
 import javax.validation.constraints.NotNull;
 import java.util.ArrayDeque;
@@ -29,6 +30,7 @@ import java.util.Deque;
  */
 public class DataObjectDeque {
 
+    private final Logger LOG = Logger.getLogger(DataObjectDeque.class);
     private final Deque<PathEntry> path = new ArrayDeque<>();
     private final WrappedIndexView index;
 
@@ -72,14 +74,14 @@ public class DataObjectDeque {
         PathEntry entry = leafNode(parentPathEntry, annotationInstance, klazzInfo, type, schema);
         if (parentPathEntry.hasParent(entry)) {
             // Cycle detected, don't push path.
-            //LOG.debugv("Possible cycle was detected at: {0}. Will not search further.", klazzInfo);
-            //LOG.tracev("Path: {0}", entry.toStringWithGraph());
+            LOG.debugv("Possible cycle was detected at: {0}. Will not search further.", klazzInfo);
+            LOG.tracev("Path: {0}", entry.toStringWithGraph());
             if (schema.getDescription() == null) {
                 schema.description("Cyclic reference to " + klazzInfo.name());
             }
         } else {
             // Push path to be inspected later.
-            //LOG.debugv("Adding child node to path: {0}", klazzInfo);
+            LOG.debugv("Adding child node to path: {0}", klazzInfo);
             path.push(entry);
         }
     }

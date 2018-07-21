@@ -18,7 +18,6 @@ package io.smallrye.openapi.runtime.scanner;
 import io.smallrye.openapi.api.models.media.SchemaImpl;
 import io.smallrye.openapi.runtime.scanner.indexwrapper.DataObjectDeque;
 import io.smallrye.openapi.runtime.scanner.indexwrapper.FieldProcessor;
-import io.smallrye.openapi.runtime.scanner.indexwrapper.TypeProcessor;
 import io.smallrye.openapi.runtime.scanner.indexwrapper.WrappedIndexView;
 import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
@@ -32,6 +31,7 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
+import org.jboss.logging.Logger;
 
 import java.lang.reflect.Modifier;
 import java.util.Collection;
@@ -72,7 +72,7 @@ import java.util.Map;
  */
 public class OpenApiDataObjectScanner {
 
-    //    private static final Logger LOG = Logger.getLogger(OpenApiDataObjectScanner.class);
+    private static final Logger LOG = Logger.getLogger(OpenApiDataObjectScanner.class);
     // Object
     public static final Type OBJECT_TYPE = Type.create(DotName.createSimple(java.lang.Object.class.getName()), Type.Kind.CLASS);
     // Collection (list-type things)
@@ -175,7 +175,7 @@ public class OpenApiDataObjectScanner {
      * @return the OAI schema
      */
     public Schema process() {
-        //LOG.debugv("Starting processing with root: {0}", rootClassType.name());
+        LOG.infov("Starting processing with root: {0}", rootClassType.name());
 
         // If top level item is simple
         if (isTerminalType(rootClassType)) {
@@ -196,11 +196,11 @@ public class OpenApiDataObjectScanner {
         DataObjectDeque.PathEntry root = path.rootNode(rootClassType, rootClassInfo, rootSchema);
 
         // For certain special types (map, list, etc) we need to do some pre-processing.
-//        if (isSpecialType(rootClassType)) {
-//            resolveSpecial(root, rootClassType);
-//        } else {
+        if (isSpecialType(rootClassType)) {
+            resolveSpecial(root, rootClassType);
+        } else {
             path.push(root);
-//        }
+        }
 
         dfs(path.peek());
         return rootSchema;
@@ -211,15 +211,19 @@ public class OpenApiDataObjectScanner {
         DataObjectDeque.PathEntry currentPathEntry = rootNode;
 
         while (!path.isEmpty()) {
+            currentPathEntry = path.pop();
+
             ClassInfo currentClass = currentPathEntry.getClazz();
             Schema currentSchema = currentPathEntry.getSchema();
             Type currentType = currentPathEntry.getClazzType();
 
+            currentSchema = readKlass(currentClass, currentSchema);
+
             // First, handle class annotations.
             // TODO is this necessary any more?
-            currentPathEntry.setSchema(readKlass(currentClass, currentSchema));
+            currentPathEntry.setSchema(currentSchema);
 
-            //LOG.debugv("Getting all fields for: {0} in class: {1}", currentType, currentClass);
+            LOG.infov("Getting all fields for: {0} in class: {1}", currentType, currentClass);
 
             // Get all fields *including* inherited.
             Map<FieldInfo, TypeResolver> allFields = TypeResolver.getAllFields(index, currentType, currentClass);
@@ -230,12 +234,14 @@ public class OpenApiDataObjectScanner {
                 TypeResolver resolver = entry.getValue();
                 // Ignore static fields and fields annotated with ignore.
                 if (!Modifier.isStatic(field.flags()) && !ignoreResolver.isIgnore(field, currentPathEntry)) {
-                    //LOG.tracev("Iterating field {0}", field);
+                    LOG.infov("Iterating field {0}", field);
                     FieldProcessor.process(index, path, resolver, currentPathEntry, field);
                 }
             }
 
-            currentPathEntry = path.pop();
+            System.out.println("Peek -- " + path.peek());
+
+
             // Handle methods
             // TODO put it here!
         }
@@ -257,20 +263,20 @@ public class OpenApiDataObjectScanner {
     }
 
     private Schema preProcessSpecial(Type type, TypeResolver typeResolver, Schema parentSchema, DataObjectDeque.PathEntry currentPathEntry) {
-        Schema fieldSchema = new SchemaImpl();
-        AnnotationInstance schemaAnno = TypeUtil.getSchemaAnnotation(type);
+//        Schema fieldSchema = new SchemaImpl();
+//        AnnotationInstance schemaAnno = TypeUtil.getSchemaAnnotation(type);
 
-        if (schemaAnno != null) {
+//        if (schemaAnno != null) {
             // 1. Handle field annotated with @Schema.
             //return readSchemaAnnotatedField(null, schemaAnno, type.name().toString(), type, typeResolver, parentSchema, fieldSchema, currentPathEntry);
 
-            //return FieldProcessor.process(index, path, typeResolver, currentPathEntry, type);
+//            return FieldProcessor.process(index, path, typeResolver, currentPathEntry, type);
 
-            TypeProcessor tp = new TypeProcessor(index, path, typeResolver, currentPathEntry, type, fieldSchema, schemaAnno);
-            tp.processType();
-            return tp.getSchema(); // TODO this interface sucks. Maybe return a pair or dataobject or something.
+//            TypeProcessor tp = new TypeProcessor(index, path, typeResolver, currentPathEntry, type, fieldSchema, schemaAnno);
+//            tp.processType();
+//            return tp.getSchema(); // TODO this interface sucks. Maybe return a pair or dataobject or something.
 
-        } else {
+//        } else {
             // 2. Handle unannotated field and just do simple inference.
             //readUnannotatedField(null, typeResolver, type, fieldSchema, currentPathEntry);
 
@@ -278,10 +284,19 @@ public class OpenApiDataObjectScanner {
 
 
             // Unannotated won't result in substitution, so just return field schema.
-            return fieldSchema;
-        }
+//            return fieldSchema;
+//        }
 
         //return fieldSchema;
+
+        //return FieldProcessor.process(index, path, typeResolver, currentPathEntry, type);
+
+        System.out.println("Special");
+
+        FieldProcessor fieldProcessor = new FieldProcessor(index, path, typeResolver, currentPathEntry, type);
+        Schema mutate = fieldProcessor.processField();
+
+        return mutate;
     }
 
     private boolean isA(Type testSubject, Type test) {

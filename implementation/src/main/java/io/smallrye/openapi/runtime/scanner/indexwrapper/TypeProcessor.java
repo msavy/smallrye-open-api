@@ -1,3 +1,18 @@
+/*
+ * Copyright 2018 Red Hat, Inc, and individual contributors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.smallrye.openapi.runtime.scanner.indexwrapper;
 
 import io.smallrye.openapi.api.models.media.SchemaImpl;
@@ -10,6 +25,7 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
+import org.jboss.logging.Logger;
 
 import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.ARRAY_TYPE_OBJECT;
 import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.COLLECTION_TYPE;
@@ -22,6 +38,8 @@ import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.STRIN
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
  */
 public class TypeProcessor {
+    private static final Logger LOG = Logger.getLogger(TypeProcessor.class);
+
     private final Schema schema;
     private final WrappedIndexView index;
     private final AnnotationInstance annotationInstance;
@@ -29,12 +47,6 @@ public class TypeProcessor {
     private final TypeResolver typeResolver;
     private final DataObjectDeque.PathEntry parentPathEntry;
     private Type type;
-
-//    public FieldProcessor(WrappedIndexView index,
-//                          DataObjectDeque objectStack,
-//                          TypeResolver typeResolver,
-//                          DataObjectDeque.PathEntry parentPathEntry,
-//                          FieldInfo fieldInfo) {
 
     public TypeProcessor(WrappedIndexView index,
                          DataObjectDeque objectStack,
@@ -52,10 +64,6 @@ public class TypeProcessor {
         this.annotationInstance = annotationInstance;
     }
 
-//    public static Schema process() {
-//        return new TypeProcessor().processType();
-//    }
-
     public Schema getSchema() {
         return schema;
     }
@@ -71,7 +79,7 @@ public class TypeProcessor {
         }
 
         if (type.kind() == Type.Kind.ARRAY) {
-            //LOG.debugv("Processing an array {0}", fieldType);
+            LOG.infov("Processing an array {0}", type);
             ArrayType arrayType = type.asArrayType();
 
             // TODO handle multi-dimensional arrays.
@@ -89,13 +97,13 @@ public class TypeProcessor {
             // If it's not a terminal type, then push for later inspection.
             if (!isTerminalType(arrayType.component()) && index.containsClass(type)) {
                 ClassInfo resolvedKlazz = index.getClass(type);
-                pushField(type, resolvedKlazz, arrSchema);
+                pushToStack(type, resolvedKlazz, arrSchema);
             }
             return arrayType;
         }
 
         if (isA(type, ENUM_TYPE) && index.containsClass(type)) {
-            //LOG.debugv("Processing an enum {0}", fieldType);
+            LOG.infov("Processing an enum {0}", type);
             ClassInfo enumKlazz = index.getClass(type);
 
             for (FieldInfo enumField : enumKlazz.fields()) {
@@ -119,7 +127,7 @@ public class TypeProcessor {
                 type.kind() == Type.Kind.UNRESOLVED_TYPE_VARIABLE) {
             // Resolve type variable to real variable.
             //return resolveTypeVariable(annotationTarget, typeResolver, schema, pathEntry, fieldType);
-            resolveTypeVariable(schema, type);
+            return resolveTypeVariable(schema, type);
         }
 
         // Raw Collection
@@ -134,23 +142,23 @@ public class TypeProcessor {
 
         // Simple case: bare class or primitive type.
         if (index.containsClass(type)) {
-            pushField(type);
+            pushToStack(type);
         } else {
             // If the type is not in Jandex then we don't have easy access to it.
             // Future work could consider separate code to traverse classes reachable from this classloader.
-//            LOG.debugv("Encountered type not in Jandex index that is not well-known type. " +
-//                    "Will not traverse it: {0}", fieldType);
+            LOG.infov("Encountered type not in Jandex index that is not well-known type. " +
+                    "Will not traverse it: {0}", type);
         }
 
         return type;
     }
 
     private Type readParameterizedType(ParameterizedType pType) {
-        //LOG.debugv("Processing parameterized type {0}", pType);
+        LOG.infov("Processing parameterized type {0}", pType);
 
         // If it's a collection, we should treat it as an array.
         if (isA(pType, COLLECTION_TYPE)) { // TODO maybe also Iterable?
-            //LOG.debugv("Processing Java Collection. Will treat as an array.");
+            LOG.infov("Processing Java Collection. Will treat as an array.");
             SchemaImpl arraySchema = new SchemaImpl();
             schema.type(Schema.SchemaType.ARRAY);
             schema.items(arraySchema);
@@ -167,7 +175,7 @@ public class TypeProcessor {
             }
             return ARRAY_TYPE_OBJECT; // Representing collection as JSON array
         } else if (isA(pType, MAP_TYPE)) {
-            //LOG.debugv("Processing Map. Will treat as an object.");
+            LOG.infov("Processing Map. Will treat as an object.");
             schema.type(Schema.SchemaType.OBJECT);
 
             if (pType.arguments().size() == 2) {
@@ -187,7 +195,7 @@ public class TypeProcessor {
         } else {
             // TODO is a index.contains check necessary?
             // This type will be resolved later, if necessary.
-            pushField(pType);
+            pushToStack(pType);
             return pType;
         }
     }
@@ -202,7 +210,7 @@ public class TypeProcessor {
             }
         } else if (index.containsClass(valueType)) {
             propsSchema.type(Schema.SchemaType.OBJECT);
-            pushField(valueType, propsSchema);
+            pushToStack(valueType, propsSchema);
         }
     }
 
@@ -210,37 +218,43 @@ public class TypeProcessor {
         // Type variable (e.g. A in Foo<A>)
         Type resolvedType = typeResolver.getResolvedType(fieldType);
 
-        //LOG.debugv("Resolved type {0} -> {1}", fieldType, resolvedType);
-        if (isTerminalType(resolvedType) || index.containsClass(resolvedType)) {
-            //LOG.tracev("Is a terminal type {0}", resolvedType);
+        LOG.infov("Resolved type {0} -> {1}", fieldType, resolvedType);
+        if (isTerminalType(resolvedType) || !index.containsClass(resolvedType)) {
+            LOG.infov("Is a terminal type {0}", resolvedType);
             TypeUtil.TypeWithFormat replacement = TypeUtil.getTypeFormat(resolvedType);
             schema.setType(replacement.getSchemaType());
             schema.setFormat(replacement.getFormat().format());
         } else {
-            //LOG.debugv("Attempting to do TYPE_VARIABLE substitution: {0} -> {1}", fieldType, resolvedType);
+            LOG.infov("Attempting to do TYPE_VARIABLE substitution: {0} -> {1}", fieldType, resolvedType);
 
             if (index.containsClass(resolvedType)) {
-                pushField(resolvedType);
+                // TODO: Cycle detection incorrectly sees cycle in same-class nested generic types (but with non-cyclic generic args).
+                // TODO: e.g. Foo<String, Foo<Integer, Integer> is not automatically a cycle.
+                // TODO: This could be fixed by factoring generic args
+                ClassInfo klazz = index.getClass(resolvedType);
+                DataObjectDeque.PathEntry entry = objectStack.leafNode(parentPathEntry, annotationInstance, klazz, resolvedType, schema);
+                objectStack.push(entry);
             } else {
-                //LOG.debugv("Class for type {0} not available", resolvedType);
+                LOG.infov("Class for type {0} not available", resolvedType);
             }
         }
         return resolvedType;
     }
 
-    private void pushField(Type fieldType) {
+    private void pushToStack(Type fieldType) {
+        LOG.info("pushing " + fieldType);
         objectStack.pushField(annotationInstance, parentPathEntry, fieldType, schema);
     }
 
     // TODO remove ClassInfo?
-    private void pushField(Type resolvedType, ClassInfo resolvedKlazz, Schema schema) {
+    private void pushToStack(Type resolvedType, ClassInfo resolvedKlazz, Schema schema) {
         objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schema);
     }
 
     // TODO remove ClassInfo?
-    private void pushField(Type resolvedType, Schema schema) {
+    private void pushToStack(Type resolvedType, Schema schemax) {
         ClassInfo resolvedKlazz = index.getClass(resolvedType);
-        objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schema);
+        objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schemax);
     }
 
     private boolean isA(Type testSubject, Type test) {
