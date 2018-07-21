@@ -252,9 +252,9 @@ public class TypeProcessor {
     }
 
     // TODO remove ClassInfo?
-    private void pushToStack(Type resolvedType, Schema schemax) {
+    private void pushToStack(Type resolvedType, Schema schema) {
         ClassInfo resolvedKlazz = index.getClass(resolvedType);
-        objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schemax);
+        objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schema);
     }
 
     private boolean isA(Type testSubject, Type test) {
