@@ -15,22 +15,19 @@
  */
 package io.smallrye.openapi.runtime.scanner;
 
+import io.smallrye.openapi.runtime.scanner.indexwrapper.WrappedIndexView;
+import io.smallrye.openapi.runtime.util.TypeUtil;
+import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.FieldInfo;
+import org.jboss.jandex.ParameterizedType;
+import org.jboss.jandex.Type;
+import org.jboss.jandex.TypeVariable;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import javax.validation.constraints.NotNull;
-
-import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.FieldInfo;
-import org.jboss.jandex.IndexView;
-import org.jboss.jandex.ParameterizedType;
-import org.jboss.jandex.Type;
-import org.jboss.jandex.TypeVariable;
-
-import io.smallrye.openapi.runtime.util.TypeUtil;
 
 /**
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
@@ -76,7 +73,7 @@ public class TypeResolver {
         return current;
     }
 
-    public static Map<FieldInfo, TypeResolver> getAllFields(IndexView index, Type leaf, ClassInfo leafKlazz) {
+    public static Map<FieldInfo, TypeResolver> getAllFields(WrappedIndexView index, Type leaf, ClassInfo leafKlazz) {
         Map<FieldInfo, TypeResolver> fields = new LinkedHashMap<>();
         Type currentType = leaf;
         ClassInfo currentClass = leafKlazz;
@@ -99,7 +96,7 @@ public class TypeResolver {
                 break;
             }
 
-            currentClass = getClassByName(index, currentType);
+            currentClass = index.getClass(currentType);
 
             if (currentClass == null) {
                 break;
@@ -126,10 +123,6 @@ public class TypeResolver {
         }
 
         return resolutionMap;
-    }
-
-    private  static ClassInfo getClassByName(IndexView index, @NotNull Type type) {
-        return index.getClassByName(TypeUtil.getName(type));
     }
 
 }

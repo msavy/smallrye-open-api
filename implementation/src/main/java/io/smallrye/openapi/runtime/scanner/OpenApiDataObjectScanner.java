@@ -23,12 +23,12 @@ import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
@@ -90,12 +90,12 @@ public class OpenApiDataObjectScanner {
     public static final Type ARRAY_TYPE_OBJECT = ArrayType.create(DotName.createSimple("[Ljava.lang.Object;"), Type.Kind.ARRAY);
 
     private Schema rootSchema;
+    private AnnotationTarget rootAnnotationTarget;
     private final Type rootClassType;
     private final ClassInfo rootClassInfo;
     private final TypeUtil.TypeWithFormat rootClassTypeFormat;
-
     private final WrappedIndexView index;
-    private final DataObjectDeque path;
+    private final DataObjectDeque objectStack;
     private final IgnoreResolver ignoreResolver;
 
     /**
@@ -108,7 +108,7 @@ public class OpenApiDataObjectScanner {
      */
     public OpenApiDataObjectScanner(IndexView _index, Type classType) {
         this.index = new WrappedIndexView(_index);
-        this.path = new DataObjectDeque(index);
+        this.objectStack = new DataObjectDeque(index);
         this.ignoreResolver = new IgnoreResolver(index);
         this.rootClassType = classType;
         this.rootClassTypeFormat = TypeUtil.getTypeFormat(classType);
@@ -116,13 +116,24 @@ public class OpenApiDataObjectScanner {
         this.rootClassInfo = initialType(classType);
     }
 
-    /**
-     * Build a Schema with ClassType as root.
-     *
-     * @param index index of types to scan
-     * @param type  root to begin scan
-     * @return the OAI schema
-     */
+    public OpenApiDataObjectScanner(IndexView _index, AnnotationTarget annotationTarget, Type classType) {
+        this.index = new WrappedIndexView(_index);
+        this.objectStack = new DataObjectDeque(index);
+        this.ignoreResolver = new IgnoreResolver(index);
+        this.rootClassType = classType;
+        this.rootClassTypeFormat = TypeUtil.getTypeFormat(classType);
+        this.rootSchema = new SchemaImpl();
+        this.rootClassInfo = initialType(classType);
+        this.rootAnnotationTarget = annotationTarget;
+    }
+
+        /**
+         * Build a Schema with ClassType as root.
+         *
+         * @param index index of types to scan
+         * @param type  root to begin scan
+         * @return the OAI schema
+         */
     public static Schema process(IndexView index, Type type) {
         return new OpenApiDataObjectScanner(index, type).process();
     }
@@ -142,17 +153,6 @@ public class OpenApiDataObjectScanner {
     }
 
     /**
-     * Build a Schema with {@link ParameterizedType} as root.
-     *
-     * @param index index of types to scan
-     * @param pType root to begin scan
-     * @return the OAI schema
-     */
-    public static Schema process(IndexView index, ParameterizedType pType) {
-        return new OpenApiDataObjectScanner(index, pType).process();
-    }
-
-    /**
      * Build the Schema
      *
      * @return the OAI schema
@@ -169,20 +169,19 @@ public class OpenApiDataObjectScanner {
         }
 
         // If top level item is not indexed
-        if (rootClassInfo == null && path.isEmpty()) {
-            // If there's something on the path stack then pre-scanning may have found something.
+        if (rootClassInfo == null && objectStack.isEmpty()) {
+            // If there's something on the objectStack stack then pre-scanning may have found something.
             return null;
         }
 
-        // If top level is a special item, we need to skip search else it'll try to index fields
-        // Embedded special items are handled ok.
-        DataObjectDeque.PathEntry root = path.rootNode(rootClassType.annotations(), rootClassType, rootClassInfo, rootSchema);
+        // Create root node.
+        DataObjectDeque.PathEntry root = objectStack.rootNode(rootAnnotationTarget, rootClassType, rootClassInfo, rootSchema);
 
         // For certain special types (map, list, etc) we need to do some pre-processing.
         if (isSpecialType(rootClassType)) {
             resolveSpecial(root, rootClassType);
         } else {
-            path.push(root);
+            objectStack.push(root);
         }
 
         depthFirstGraphSearch();
@@ -193,8 +192,8 @@ public class OpenApiDataObjectScanner {
     private void depthFirstGraphSearch() {
         DataObjectDeque.PathEntry currentPathEntry;
 
-        while (!path.isEmpty()) {
-            currentPathEntry = path.pop();
+        while (!objectStack.isEmpty()) {
+            currentPathEntry = objectStack.pop();
 
             ClassInfo currentClass = currentPathEntry.getClazz();
             Schema currentSchema = currentPathEntry.getSchema();
@@ -216,7 +215,7 @@ public class OpenApiDataObjectScanner {
                 // Ignore static fields and fields annotated with ignore.
                 if (!Modifier.isStatic(field.flags()) && !ignoreResolver.isIgnore(field, currentPathEntry)) {
                     LOG.infov("Iterating field {0}", field);
-                    FieldProcessor.process(index, path, resolver, currentPathEntry, field);
+                    FieldProcessor.process(index, objectStack, resolver, currentPathEntry, field);
                 }
             }
 
@@ -241,7 +240,7 @@ public class OpenApiDataObjectScanner {
     }
 
     private Schema preProcessSpecial(Type type, TypeResolver typeResolver, DataObjectDeque.PathEntry currentPathEntry) {
-        FieldProcessor fieldProcessor = new FieldProcessor(index, path, typeResolver, currentPathEntry, type);
+        FieldProcessor fieldProcessor = new FieldProcessor(index, objectStack, typeResolver, currentPathEntry, type);
         return fieldProcessor.processField();
     }
 
@@ -268,7 +267,7 @@ public class OpenApiDataObjectScanner {
     }
 
     // Is Map, Collection, etc.
-    private boolean isSpecialType(Type type) { // FIXME
+    private boolean isSpecialType(Type type) {
         return isA(type, COLLECTION_TYPE) || isA(type, MAP_TYPE);
     }
 

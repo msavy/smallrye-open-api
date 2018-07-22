@@ -19,7 +19,7 @@ import io.smallrye.openapi.api.models.media.SchemaImpl;
 import io.smallrye.openapi.runtime.scanner.TypeResolver;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
-import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.FieldInfo;
@@ -42,7 +42,7 @@ public class TypeProcessor {
 
     private final Schema schema;
     private final WrappedIndexView index;
-    private final AnnotationInstance annotationInstance;
+    private final AnnotationTarget annotationTarget;
     private final DataObjectDeque objectStack;
     private final TypeResolver typeResolver;
     private final DataObjectDeque.PathEntry parentPathEntry;
@@ -55,14 +55,14 @@ public class TypeProcessor {
                          DataObjectDeque.PathEntry parentPathEntry, TypeResolver typeResolver,
                          Type type,
                          Schema schema,
-                         AnnotationInstance annotationInstance) {
+                         AnnotationTarget annotationTarget) {
         this.objectStack = objectStack;
         this.typeResolver = typeResolver;
         this.parentPathEntry = parentPathEntry;
         this.type = type;
         this.schema = schema;
         this.index = index;
-        this.annotationInstance = annotationInstance;
+        this.annotationTarget = annotationTarget;
     }
 
     public Schema getSchema() {
@@ -230,7 +230,7 @@ public class TypeProcessor {
                 // TODO: Cycle detection incorrectly sees cycle in same-class nested generic types (but with non-cyclic generic args).
                 // TODO: e.g. Foo<String, Foo<Integer, Integer> is not necessarily a cycle.
                 // TODO: This could be fixed by factoring generic args
-                DataObjectDeque.PathEntry entry = objectStack.leafNode(parentPathEntry, annotationInstance, resolvedType, schema);
+                DataObjectDeque.PathEntry entry = objectStack.leafNode(parentPathEntry, annotationTarget, resolvedType, schema);
                 objectStack.push(entry);
             } else {
                 LOG.infov("Class for type {0} not available", resolvedType);
@@ -240,12 +240,12 @@ public class TypeProcessor {
     }
 
     private void pushToStack(Type fieldType) {
-        objectStack.push(annotationInstance, parentPathEntry, fieldType, schema);
+        objectStack.push(annotationTarget, parentPathEntry, fieldType, schema);
     }
 
     // TODO remove ClassInfo?
     private void pushToStack(Type resolvedType, Schema schema) {
-        objectStack.push(annotationInstance, parentPathEntry, resolvedType, schema);
+        objectStack.push(annotationTarget, parentPathEntry, resolvedType, schema);
     }
 
     private boolean isA(Type testSubject, Type test) {

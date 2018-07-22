@@ -18,6 +18,7 @@ package io.smallrye.openapi.runtime.scanner;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.Type;
 import org.json.JSONException;
 import org.junit.Test;
@@ -48,22 +49,18 @@ public class IgnoreTests extends OpenApiDataObjectScannerTestBase {
         OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index,
                 ClassType.create(kitchenSink, Type.Kind.CLASS));
         Schema result = scanner.process();
-
-
         printToConsole("foo", result);
-
     }
 
+    @Test
+    public void testIgnore_jsonIgnorePropertiesOnField() throws IOException, JSONException {
+        String name = IgnoreTestContainer.class.getName();
+        FieldInfo fieldInfo = getFieldFromKlazz(name, "jipOnFieldTest");
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, fieldInfo, fieldInfo.type());
 
-//    @Test
-//    public void testIgnore_jsonIgnorePropertiesOnField() throws IOException, JSONException {
-//        String name = IgnoreTestContainer.class.getName();
-//        Type type = getFieldFromKlazz(name, "jipOnFieldTest").type();
-//        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, type);
-//
-//        Schema result = scanner.process();
-//
-//        printToConsole(name, result);
-//        assertJsonEquals(name, "ignore.jsonIgnorePropertiesOnClass.expected.json", result);
-//    }
+        Schema result = scanner.process();
+
+        printToConsole(name, result);
+        assertJsonEquals(name, "ignore.jsonIgnorePropertiesOnField.expected.json", result);
+    }
 }

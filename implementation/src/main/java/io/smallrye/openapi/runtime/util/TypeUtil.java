@@ -226,6 +226,11 @@ public class TypeUtil {
         return TypeUtil.getBound(type.asWildcardType());
     }
 
+
+    public static AnnotationInstance getSchemaAnnotation(AnnotationTarget annotationTarget) {
+        return getAnnotation(annotationTarget, OpenApiConstants.DOTNAME_SCHEMA);
+    }
+
     public static AnnotationInstance getSchemaAnnotation(ClassInfo field) {
         return getAnnotation(field, OpenApiConstants.DOTNAME_SCHEMA);
     }
@@ -238,8 +243,11 @@ public class TypeUtil {
         return getAnnotation(type, OpenApiConstants.DOTNAME_SCHEMA);
     }
 
-    public static AnnotationInstance getAnnotation(AnnotationTarget type, DotName annotationName) {
-        return getAnnotations(type).stream()
+    public static AnnotationInstance getAnnotation(AnnotationTarget annotationTarget, DotName annotationName) {
+        if (annotationTarget == null) {
+            return null;
+        }
+        return getAnnotations(annotationTarget).stream()
                 .filter(annotation -> annotation.name().equals(annotationName))
                 .findFirst()
                 .orElse(null);

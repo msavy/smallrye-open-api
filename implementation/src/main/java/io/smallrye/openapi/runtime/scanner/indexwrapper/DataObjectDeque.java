@@ -16,7 +16,7 @@
 package io.smallrye.openapi.runtime.scanner.indexwrapper;
 
 import org.eclipse.microprofile.openapi.models.media.Schema;
-import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
@@ -58,11 +58,11 @@ public class DataObjectDeque {
         return path.pop();
     }
 
-    public void push(AnnotationInstance annotationInstance,
+    public void push(AnnotationTarget annotationTarget,
                      @NotNull PathEntry parentPathEntry,
                      @NotNull Type type,
                      @NotNull Schema schema) {
-        PathEntry entry = leafNode(parentPathEntry, annotationInstance, type, schema);
+        PathEntry entry = leafNode(parentPathEntry, annotationTarget, type, schema);
         ClassInfo klazzInfo = entry.getClazz();
         if (parentPathEntry.hasParent(entry)) {
             // Cycle detected, don't push path.
@@ -78,21 +78,25 @@ public class DataObjectDeque {
         }
     }
 
+    public PathEntry rootNode(AnnotationTarget annotationTarget, Type classType, ClassInfo classInfo, Schema rootSchema) {
+        return new PathEntry(null, annotationTarget, classInfo, classType, rootSchema);
+    }
+
     public PathEntry rootNode(Type classType, ClassInfo classInfo, Schema rootSchema) {
         return new PathEntry(null, null, classInfo, classType, rootSchema);
     }
 
     public PathEntry leafNode(PathEntry parentNode,
-                                     AnnotationInstance annotationInstance,
-                                     Type classType,
-                                     Schema rootSchema) {
+                              AnnotationTarget annotationTarget,
+                              Type classType,
+                              Schema rootSchema) {
         ClassInfo classInfo = index.getClass(classType);
-        return new PathEntry(parentNode, annotationInstance, classInfo, classType, rootSchema);
+        return new PathEntry(parentNode, annotationTarget, classInfo, classType, rootSchema);
     }
 
     public static final class PathEntry {
         private final PathEntry enclosing;
-        private final AnnotationInstance annotationInstance;
+        private final AnnotationTarget annotationTarget;
         private final Type clazzType;
         private final ClassInfo clazz;
 
@@ -100,12 +104,12 @@ public class DataObjectDeque {
         private Schema schema;
 
         PathEntry(PathEntry enclosing,
-                  AnnotationInstance annotationInstance,
+                  AnnotationTarget annotationTarget,
                   @NotNull ClassInfo clazz,
                   @NotNull Type clazzType,
                   @NotNull Schema schema) {
             this.enclosing = enclosing;
-            this.annotationInstance = annotationInstance;
+            this.annotationTarget = annotationTarget;
             this.clazz = clazz;
             this.clazzType = clazzType;
             this.schema = schema;
@@ -122,8 +126,8 @@ public class DataObjectDeque {
             return false;
         }
 
-        public AnnotationInstance getAnnotationInstance() {
-            return annotationInstance;
+        public AnnotationTarget getAnnotationTarget() {
+            return annotationTarget;
         }
 
         public PathEntry getEnclosing() {

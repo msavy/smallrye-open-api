@@ -23,6 +23,7 @@ import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
@@ -47,13 +48,13 @@ public class FieldProcessor {
     // This can be overridden.
     private Schema fieldSchema;
     // May be null if field is unannotated.
-    private AnnotationInstance fieldAnnotationInstance;
+    private AnnotationTarget annotationTarget;
 
     public FieldProcessor(WrappedIndexView index,
                           DataObjectDeque objectStack,
                           DataObjectDeque.PathEntry parentPathEntry,
                           TypeResolver typeResolver,
-                          AnnotationInstance annotationInstance,
+                          AnnotationTarget annotationTarget,
                           String entityName,
                           Type entityType) {
         this.index = index;
@@ -62,7 +63,7 @@ public class FieldProcessor {
         this.typeResolver = typeResolver;
         this.fieldName = entityName;
         this.fieldType = entityType;
-        this.fieldAnnotationInstance = annotationInstance;
+        this.annotationTarget = annotationTarget;
         this.fieldSchema = new SchemaImpl();
     }
 
@@ -71,7 +72,7 @@ public class FieldProcessor {
                           TypeResolver typeResolver,
                           DataObjectDeque.PathEntry parentPathEntry,
                           FieldInfo fieldInfo) {
-        this(index, objectStack, parentPathEntry, typeResolver, TypeUtil.getSchemaAnnotation(fieldInfo), fieldInfo.name(), fieldInfo.type());
+        this(index, objectStack, parentPathEntry, typeResolver, fieldInfo, fieldInfo.name(), fieldInfo.type());
     }
 
     public FieldProcessor(WrappedIndexView index,
@@ -79,7 +80,7 @@ public class FieldProcessor {
                           TypeResolver typeResolver,
                           DataObjectDeque.PathEntry parentPathEntry,
                           Type type) {
-        this(index, objectStack, parentPathEntry, typeResolver, TypeUtil.getSchemaAnnotation(type), type.name().toString(), type);
+        this(index, objectStack, parentPathEntry, typeResolver, index.getClass(type), type.name().toString(), type);
     }
 
     public static Schema process(WrappedIndexView index,
@@ -92,12 +93,14 @@ public class FieldProcessor {
     }
 
     public Schema processField() {
-        if (fieldAnnotationInstance == null && shouldInferUnannotatedFields()) {
+        AnnotationInstance schemaAnnotation = TypeUtil.getSchemaAnnotation(annotationTarget);
+
+        if (schemaAnnotation == null && shouldInferUnannotatedFields()) {
             // Handle unannotated field and just do simple inference.
             readUnannotatedField();
         } else {
             // Handle field annotated with @Schema.
-            readSchemaAnnotatedField(fieldAnnotationInstance);
+            readSchemaAnnotatedField(schemaAnnotation);
         }
         parentPathEntry.getSchema().addProperty(fieldName, fieldSchema);
         return fieldSchema;
@@ -123,7 +126,7 @@ public class FieldProcessor {
         }
 
         // Type could be replaced (e.g. generics). TODO too many args
-        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, fieldType, fieldSchema, fieldAnnotationInstance);
+        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, fieldType, fieldSchema, annotationTarget);
 
         Type postProcessedField = typeProcessor.processType();
         fieldSchema = typeProcessor.getSchema();
@@ -142,7 +145,7 @@ public class FieldProcessor {
     private void readUnannotatedField() {
         LOG.infov("Processing unannotated field {0}", fieldType);
 
-        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, fieldType, fieldSchema, fieldAnnotationInstance);
+        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, fieldType, fieldSchema, annotationTarget);
 
         Type postProcessedField = typeProcessor.processType();
         fieldSchema = typeProcessor.getSchema();
