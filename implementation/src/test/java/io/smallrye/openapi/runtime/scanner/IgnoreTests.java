@@ -23,6 +23,8 @@ import org.jboss.jandex.Type;
 import org.json.JSONException;
 import org.junit.Test;
 import test.io.smallrye.openapi.runtime.scanner.entities.IgnoreTestContainer;
+import test.io.smallrye.openapi.runtime.scanner.entities.JsonIgnoreOnFieldExample;
+import test.io.smallrye.openapi.runtime.scanner.entities.JsonIgnoreTypeExample;
 
 import java.io.IOException;
 
@@ -31,6 +33,7 @@ import java.io.IOException;
  */
 public class IgnoreTests extends OpenApiDataObjectScannerTestBase {
 
+    // Always ignore nominated properties when given class is used.
     @Test
     public void testIgnore_jsonIgnorePropertiesOnClass() throws IOException, JSONException {
         String name = IgnoreTestContainer.class.getName();
@@ -43,15 +46,7 @@ public class IgnoreTests extends OpenApiDataObjectScannerTestBase {
         assertJsonEquals(name, "ignore.jsonIgnorePropertiesOnClass.expected.json", result);
     }
 
-    @Test
-    public void test() throws IOException {
-        DotName kitchenSink = DotName.createSimple(IgnoreTestContainer.class.getName());
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index,
-                ClassType.create(kitchenSink, Type.Kind.CLASS));
-        Schema result = scanner.process();
-        printToConsole("foo", result);
-    }
-
+    // Ignore nominated properties of the field in this instance only.
     @Test
     public void testIgnore_jsonIgnorePropertiesOnField() throws IOException, JSONException {
         String name = IgnoreTestContainer.class.getName();
@@ -63,4 +58,31 @@ public class IgnoreTests extends OpenApiDataObjectScannerTestBase {
         printToConsole(name, result);
         assertJsonEquals(name, "ignore.jsonIgnorePropertiesOnField.expected.json", result);
     }
+
+    // Entirely ignore a single field once.
+    @Test
+    public void testIgnore_jsonIgnoreField() throws IOException, JSONException {
+        DotName name = DotName.createSimple(JsonIgnoreOnFieldExample.class.getName());
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index,
+                ClassType.create(name, Type.Kind.CLASS));
+
+        Schema result = scanner.process();
+
+        printToConsole(name.local(), result);
+        assertJsonEquals(name.local(), "ignore.jsonIgnoreField.expected.json", result);
+    }
+
+    // Entirely ignore a single field once.
+    @Test
+    public void testIgnore_jsonIgnoreType() throws IOException, JSONException {
+        DotName name = DotName.createSimple(JsonIgnoreTypeExample.class.getName());
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index,
+                ClassType.create(name, Type.Kind.CLASS));
+
+        Schema result = scanner.process();
+
+        printToConsole(name.local(), result);
+        assertJsonEquals(name.local(), "ignore.jsonIgnoreType.expected.json", result);
+    }
+
 }

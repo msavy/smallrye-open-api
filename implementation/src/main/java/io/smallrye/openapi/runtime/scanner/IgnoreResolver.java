@@ -24,13 +24,13 @@ import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
+import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -44,6 +44,7 @@ public class IgnoreResolver {
 
     private static final Logger LOG = Logger.getLogger(IgnoreResolver.class);
     private final Map<DotName, IgnoreAnnotationHandler> IGNORE_ANNOTATION_MAP = new LinkedHashMap<>();
+    private final WrappedIndexView index;
 
     {
         IgnoreAnnotationHandler[] ignoreHandlers = {
@@ -57,7 +58,9 @@ public class IgnoreResolver {
         }
     }
 
-    public IgnoreResolver(WrappedIndexView index) { }
+    public IgnoreResolver(WrappedIndexView index) {
+        this.index = index;
+    }
 
     public boolean isIgnore(AnnotationTarget annotationTarget, DataObjectDeque.PathEntry pathEntry) {
         for (IgnoreAnnotationHandler handler : IGNORE_ANNOTATION_MAP.values()) {
@@ -69,6 +72,9 @@ public class IgnoreResolver {
         return false;
     }
 
+    /**
+     * Handler for Jackson's {@link JsonIgnoreProperties}
+     */
     private final class JsonIgnorePropertiesHandler implements IgnoreAnnotationHandler {
 
         @Override
@@ -79,7 +85,7 @@ public class IgnoreResolver {
                 // Then look at enclosing type.
                 FieldInfo field = target.asField();
                 return declaringClassIgnore(field) || nestingFieldIgnore(parentPathEntry.getAnnotationTarget(), field.name());
-            }
+            } // TODO add method
             return false;
         }
 
@@ -127,6 +133,9 @@ public class IgnoreResolver {
         }
     }
 
+    /**
+     * Handler for Jackson's @{@link JsonIgnore}
+     */
     private final class JsonIgnoreHandler implements IgnoreAnnotationHandler {
 
         @Override
@@ -144,40 +153,45 @@ public class IgnoreResolver {
         }
     }
 
+    /**
+     * Handler for @{@link JsonIgnoreType}
+     */
     private final class JsonIgnoreTypeHandler implements IgnoreAnnotationHandler {
         private Set<DotName> ignoredTypes = new LinkedHashSet<>();
 
-
         @Override
         public boolean shouldIgnore(AnnotationTarget target, DataObjectDeque.PathEntry parentPathEntry) {
-            DotName typeName = null;
-            Collection<AnnotationInstance> annotations = Collections.emptySet();
+            Type classType;
 
-            if (target.kind() == AnnotationTarget.Kind.CLASS) {
-                typeName = target.asClass().name();
-                annotations = target.asClass().classAnnotations();
+            if (target.kind() == AnnotationTarget.Kind.FIELD) {
+                classType = target.asField().type();
+            } else { // TODO add target.kind() method
+                return false;
             }
 
-            if (typeName != null && ignoredTypes.contains(typeName)) {
-                LOG.debugv("Ignoring type that is member of ignore set: {0}", typeName);
+            // Primitive and non-indexed types will result in a null
+            if (classType.kind() == Type.Kind.PRIMITIVE ||
+                    classType.kind() == Type.Kind.VOID ||
+                    !index.containsClass(classType)) {
+                return false;
+            }
+
+            // Find the real class implementation where the @JsonIgnoreType annotation may be.
+            ClassInfo classInfo = index.getClass(classType);
+
+            if (ignoredTypes.contains(classInfo.name())) {
+                LOG.debugv("Ignoring type that is member of ignore set: {0}", classInfo.name());
                 return true;
             }
 
-            AnnotationInstance annotationInstance = getAnnotation(annotations, getName());
+            AnnotationInstance annotationInstance = TypeUtil.getAnnotation(classInfo, getName());
             if (annotationInstance != null && valueAsBooleanOrTrue(annotationInstance)) {
                 // Add the ignored field or class name
-                LOG.debugv("Ignoring type and adding to ignore set: {0}", typeName);
-                ignoredTypes.add(typeName);
+                LOG.debugv("Ignoring type and adding to ignore set: {0}", classInfo.name());
+                ignoredTypes.add(classInfo.name());
                 return true;
             }
             return false;
-        }
-
-        private AnnotationInstance getAnnotation(Collection<AnnotationInstance> annotations, DotName name) {
-            return annotations.stream()
-                    .filter(annotation -> annotation.name().equals(name))
-                    .findFirst()
-                    .orElse(null);
         }
 
         @Override
