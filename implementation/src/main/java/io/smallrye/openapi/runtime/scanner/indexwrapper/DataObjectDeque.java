@@ -58,30 +58,22 @@ public class DataObjectDeque {
         return path.pop();
     }
 
-    public void pushField(AnnotationInstance annotationInstance,
-                                 PathEntry parentPathEntry,
-                                 Type type,
-                                 Schema schema) {
-        ClassInfo klazzInfo = index.getClass(type);
-        pushPathPair(annotationInstance, parentPathEntry, type, klazzInfo, schema);
-    }
-
-    public void pushPathPair(AnnotationInstance annotationInstance,
-                              @NotNull PathEntry parentPathEntry,
-                              @NotNull Type type,
-                              @NotNull ClassInfo klazzInfo,
-                              @NotNull Schema schema) {
-        PathEntry entry = leafNode(parentPathEntry, annotationInstance, klazzInfo, type, schema);
+    public void push(AnnotationInstance annotationInstance,
+                     @NotNull PathEntry parentPathEntry,
+                     @NotNull Type type,
+                     @NotNull Schema schema) {
+        PathEntry entry = leafNode(parentPathEntry, annotationInstance, type, schema);
+        ClassInfo klazzInfo = entry.getClazz();
         if (parentPathEntry.hasParent(entry)) {
             // Cycle detected, don't push path.
-            LOG.debugv("Possible cycle was detected at: {0}. Will not search further.", klazzInfo);
-            LOG.tracev("Path: {0}", entry.toStringWithGraph());
+            LOG.infov("Possible cycle was detected at: {0}. Will not search further.", klazzInfo);
+            LOG.infov("Path: {0}", entry.toStringWithGraph());
             if (schema.getDescription() == null) {
                 schema.description("Cyclic reference to " + klazzInfo.name());
             }
         } else {
             // Push path to be inspected later.
-            LOG.debugv("Adding child node to path: {0}", klazzInfo);
+            LOG.infov("Adding child node to path: {0}", klazzInfo);
             path.push(entry);
         }
     }
@@ -92,25 +84,24 @@ public class DataObjectDeque {
 
     public PathEntry leafNode(PathEntry parentNode,
                                      AnnotationInstance annotationInstance,
-                                     ClassInfo classInfo,
                                      Type classType,
                                      Schema rootSchema) {
+        ClassInfo classInfo = index.getClass(classType);
         return new PathEntry(parentNode, annotationInstance, classInfo, classType, rootSchema);
     }
 
-    /**
-     * Needed for non-recursive DFS to keep schema and class together.
-     **/
     public static final class PathEntry {
         private final PathEntry enclosing;
-        private final Type clazzType;
-        private final ClassInfo clazz; // TODO may be able to get rid of this?
-        private Schema schema;
         private final AnnotationInstance annotationInstance;
+        private final Type clazzType;
+        private final ClassInfo clazz;
+
+        // May be changed
+        private Schema schema;
 
         PathEntry(PathEntry enclosing,
                   AnnotationInstance annotationInstance,
-                  ClassInfo clazz,
+                  @NotNull ClassInfo clazz,
                   @NotNull Type clazzType,
                   @NotNull Schema schema) {
             this.enclosing = enclosing;

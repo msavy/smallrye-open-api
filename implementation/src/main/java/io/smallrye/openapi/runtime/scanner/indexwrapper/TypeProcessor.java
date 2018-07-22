@@ -46,12 +46,13 @@ public class TypeProcessor {
     private final DataObjectDeque objectStack;
     private final TypeResolver typeResolver;
     private final DataObjectDeque.PathEntry parentPathEntry;
+
+    // Type may be changed.
     private Type type;
 
     public TypeProcessor(WrappedIndexView index,
                          DataObjectDeque objectStack,
-                         TypeResolver typeResolver,
-                         DataObjectDeque.PathEntry parentPathEntry,
+                         DataObjectDeque.PathEntry parentPathEntry, TypeResolver typeResolver,
                          Type type,
                          Schema schema,
                          AnnotationInstance annotationInstance) {
@@ -96,8 +97,7 @@ public class TypeProcessor {
 
             // If it's not a terminal type, then push for later inspection.
             if (!isTerminalType(arrayType.component()) && index.containsClass(type)) {
-                ClassInfo resolvedKlazz = index.getClass(type);
-                pushToStack(type, resolvedKlazz, arrSchema);
+                pushToStack(type, arrSchema);
             }
             return arrayType;
         }
@@ -226,13 +226,11 @@ public class TypeProcessor {
             schema.setFormat(replacement.getFormat().format());
         } else {
             LOG.infov("Attempting to do TYPE_VARIABLE substitution: {0} -> {1}", fieldType, resolvedType);
-
             if (index.containsClass(resolvedType)) {
                 // TODO: Cycle detection incorrectly sees cycle in same-class nested generic types (but with non-cyclic generic args).
-                // TODO: e.g. Foo<String, Foo<Integer, Integer> is not automatically a cycle.
+                // TODO: e.g. Foo<String, Foo<Integer, Integer> is not necessarily a cycle.
                 // TODO: This could be fixed by factoring generic args
-                ClassInfo klazz = index.getClass(resolvedType);
-                DataObjectDeque.PathEntry entry = objectStack.leafNode(parentPathEntry, annotationInstance, klazz, resolvedType, schema);
+                DataObjectDeque.PathEntry entry = objectStack.leafNode(parentPathEntry, annotationInstance, resolvedType, schema);
                 objectStack.push(entry);
             } else {
                 LOG.infov("Class for type {0} not available", resolvedType);
@@ -242,19 +240,12 @@ public class TypeProcessor {
     }
 
     private void pushToStack(Type fieldType) {
-        LOG.info("pushing " + fieldType);
-        objectStack.pushField(annotationInstance, parentPathEntry, fieldType, schema);
-    }
-
-    // TODO remove ClassInfo?
-    private void pushToStack(Type resolvedType, ClassInfo resolvedKlazz, Schema schema) {
-        objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schema);
+        objectStack.push(annotationInstance, parentPathEntry, fieldType, schema);
     }
 
     // TODO remove ClassInfo?
     private void pushToStack(Type resolvedType, Schema schema) {
-        ClassInfo resolvedKlazz = index.getClass(resolvedType);
-        objectStack.pushPathPair(annotationInstance, parentPathEntry, resolvedType, resolvedKlazz, schema);
+        objectStack.push(annotationInstance, parentPathEntry, resolvedType, schema);
     }
 
     private boolean isA(Type testSubject, Type test) {

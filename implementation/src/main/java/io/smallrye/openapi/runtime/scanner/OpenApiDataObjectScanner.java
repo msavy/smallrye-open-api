@@ -202,13 +202,13 @@ public class OpenApiDataObjectScanner {
             path.push(root);
         }
 
-        dfs(path.peek());
+        depthFirstGraphSearch();
         return rootSchema;
     }
 
     // Scan depth first.
-    private void dfs(DataObjectDeque.PathEntry rootNode) {
-        DataObjectDeque.PathEntry currentPathEntry = rootNode;
+    private void depthFirstGraphSearch() {
+        DataObjectDeque.PathEntry currentPathEntry;
 
         while (!path.isEmpty()) {
             currentPathEntry = path.pop();
@@ -217,10 +217,8 @@ public class OpenApiDataObjectScanner {
             Schema currentSchema = currentPathEntry.getSchema();
             Type currentType = currentPathEntry.getClazzType();
 
-            currentSchema = readKlass(currentClass, currentSchema);
-
             // First, handle class annotations.
-            // TODO is this necessary any more?
+            currentSchema = readKlass(currentClass, currentSchema);
             currentPathEntry.setSchema(currentSchema);
 
             LOG.infov("Getting all fields for: {0} in class: {1}", currentType, currentClass);
@@ -259,44 +257,12 @@ public class OpenApiDataObjectScanner {
 
     private void resolveSpecial(DataObjectDeque.PathEntry root, Type type) {
         Map<FieldInfo, TypeResolver> fieldResolution = TypeResolver.getAllFields(index, type, rootClassInfo);
-        rootSchema = preProcessSpecial(type, fieldResolution.values().iterator().next(), rootSchema, root);
+        rootSchema = preProcessSpecial(type, fieldResolution.values().iterator().next(), root);
     }
 
-    private Schema preProcessSpecial(Type type, TypeResolver typeResolver, Schema parentSchema, DataObjectDeque.PathEntry currentPathEntry) {
-//        Schema fieldSchema = new SchemaImpl();
-//        AnnotationInstance schemaAnno = TypeUtil.getSchemaAnnotation(type);
-
-//        if (schemaAnno != null) {
-            // 1. Handle field annotated with @Schema.
-            //return readSchemaAnnotatedField(null, schemaAnno, type.name().toString(), type, typeResolver, parentSchema, fieldSchema, currentPathEntry);
-
-//            return FieldProcessor.process(index, path, typeResolver, currentPathEntry, type);
-
-//            TypeProcessor tp = new TypeProcessor(index, path, typeResolver, currentPathEntry, type, fieldSchema, schemaAnno);
-//            tp.processType();
-//            return tp.getSchema(); // TODO this interface sucks. Maybe return a pair or dataobject or something.
-
-//        } else {
-            // 2. Handle unannotated field and just do simple inference.
-            //readUnannotatedField(null, typeResolver, type, fieldSchema, currentPathEntry);
-
-
-
-
-            // Unannotated won't result in substitution, so just return field schema.
-//            return fieldSchema;
-//        }
-
-        //return fieldSchema;
-
-        //return FieldProcessor.process(index, path, typeResolver, currentPathEntry, type);
-
-        System.out.println("Special");
-
+    private Schema preProcessSpecial(Type type, TypeResolver typeResolver, DataObjectDeque.PathEntry currentPathEntry) {
         FieldProcessor fieldProcessor = new FieldProcessor(index, path, typeResolver, currentPathEntry, type);
-        Schema mutate = fieldProcessor.processField();
-
-        return mutate;
+        return fieldProcessor.processField();
     }
 
     private boolean isA(Type testSubject, Type test) {
@@ -319,11 +285,6 @@ public class OpenApiDataObjectScanner {
         // If is known type.
         return tf.getSchemaType() != Schema.SchemaType.OBJECT &&
                 tf.getSchemaType() != Schema.SchemaType.ARRAY;
-    }
-
-    private boolean shouldInferUnannotatedFields() {
-        String infer = System.getProperties().getProperty("openapi.infer-unannotated-types", "true");
-        return Boolean.parseBoolean(infer);
     }
 
 }
