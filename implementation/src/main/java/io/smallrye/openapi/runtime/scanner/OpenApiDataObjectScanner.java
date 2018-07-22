@@ -116,23 +116,6 @@ public class OpenApiDataObjectScanner {
         this.rootClassInfo = initialType(classType);
     }
 
-    // Is Map, Collection, etc.
-    private boolean isSpecialType(Type type) { // FIXME
-        return isA(type, COLLECTION_TYPE) || isA(type, MAP_TYPE);
-    }
-
-    private ClassInfo initialType(Type type) {
-        if (isA(type, COLLECTION_TYPE)) {
-            return index.getClass(CollectionStandin.class);
-        }
-
-        if (isA(type, MAP_TYPE)) {
-            return index.getClass(MapStandin.class);
-        }
-
-        return index.getClass(type);
-    }
-
     /**
      * Build a Schema with ClassType as root.
      *
@@ -193,7 +176,7 @@ public class OpenApiDataObjectScanner {
 
         // If top level is a special item, we need to skip search else it'll try to index fields
         // Embedded special items are handled ok.
-        DataObjectDeque.PathEntry root = path.rootNode(rootClassType, rootClassInfo, rootSchema);
+        DataObjectDeque.PathEntry root = path.rootNode(rootClassType.annotations(), rootClassType, rootClassInfo, rootSchema);
 
         // For certain special types (map, list, etc) we need to do some pre-processing.
         if (isSpecialType(rootClassType)) {
@@ -236,9 +219,6 @@ public class OpenApiDataObjectScanner {
                     FieldProcessor.process(index, path, resolver, currentPathEntry, field);
                 }
             }
-
-            System.out.println("Peek -- " + path.peek());
-
 
             // Handle methods
             // TODO put it here!
@@ -285,6 +265,23 @@ public class OpenApiDataObjectScanner {
         // If is known type.
         return tf.getSchemaType() != Schema.SchemaType.OBJECT &&
                 tf.getSchemaType() != Schema.SchemaType.ARRAY;
+    }
+
+    // Is Map, Collection, etc.
+    private boolean isSpecialType(Type type) { // FIXME
+        return isA(type, COLLECTION_TYPE) || isA(type, MAP_TYPE);
+    }
+
+    private ClassInfo initialType(Type type) {
+        if (isA(type, COLLECTION_TYPE)) {
+            return index.getClass(CollectionStandin.class);
+        }
+
+        if (isA(type, MAP_TYPE)) {
+            return index.getClass(MapStandin.class);
+        }
+
+        return index.getClass(type);
     }
 
 }

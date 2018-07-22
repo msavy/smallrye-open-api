@@ -27,6 +27,7 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
+import org.jboss.logging.Logger;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -42,6 +43,7 @@ import java.util.Set;
  */
 public class IgnoreResolver {
 
+    private static final Logger LOG = Logger.getLogger(IgnoreResolver.class);
     private final Map<DotName, IgnoreAnnotationHandler> IGNORE_ANNOTATION_MAP = new LinkedHashMap<>();
 
     {
@@ -117,19 +119,11 @@ public class IgnoreResolver {
         }
 
         private boolean shouldIgnoreTarget(AnnotationInstance jipAnnotation, String targetName) {
-            if (jipAnnotation == null) {
+            if (jipAnnotation == null || jipAnnotation.value() == null) {
                 return false;
             }
-
             String[] jipValues = jipAnnotation.value().asStringArray();
-
-            if (Arrays.binarySearch(jipValues, targetName) >= 0) {
-                System.out.println("Will ignore field " + targetName);
-                return true;
-            } else {
-                System.out.println("Will keep field " + targetName);
-                return false;
-            }
+            return Arrays.stream(jipValues).anyMatch(v -> v.equals(targetName));
         }
 
         @Override
@@ -174,14 +168,14 @@ public class IgnoreResolver {
             } //todo other kinds needed? method?
 
             if (typeName != null && ignoredTypes.contains(typeName)) {
-                System.out.println("We're ignoring the type " + typeName);
+                LOG.debugv("Ignoring type that is member of ignore set: {0}", typeName);
                 return true;
             }
 
             AnnotationInstance annotationInstance = getAnnotation(annotations, getName());
             if (annotationInstance != null && valueAsBooleanOrTrue(annotationInstance)) {
                 // Add the ignored field or class name
-                System.out.println("Ignoring type " + typeName);
+                LOG.debugv("Ignoring type and adding to ignore set: {0}", typeName);
                 ignoredTypes.add(typeName);
                 return true;
             }

@@ -44,7 +44,6 @@ public class WrappedIndexView implements IndexView {
         return getClass(type) != null;
     }
 
-    // TODO remove?
     public ClassInfo getClass(@NotNull Class<?> klazz) {
         return index.getClassByName(DotName.createSimple(klazz.getName()));
     }

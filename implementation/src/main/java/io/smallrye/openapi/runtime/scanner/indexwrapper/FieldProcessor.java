@@ -53,6 +53,7 @@ public class FieldProcessor {
                           DataObjectDeque objectStack,
                           DataObjectDeque.PathEntry parentPathEntry,
                           TypeResolver typeResolver,
+                          AnnotationInstance annotationInstance,
                           String entityName,
                           Type entityType) {
         this.index = index;
@@ -61,7 +62,7 @@ public class FieldProcessor {
         this.typeResolver = typeResolver;
         this.fieldName = entityName;
         this.fieldType = entityType;
-        this.fieldAnnotationInstance = TypeUtil.getSchemaAnnotation(entityType);
+        this.fieldAnnotationInstance = annotationInstance;
         this.fieldSchema = new SchemaImpl();
     }
 
@@ -70,7 +71,7 @@ public class FieldProcessor {
                           TypeResolver typeResolver,
                           DataObjectDeque.PathEntry parentPathEntry,
                           FieldInfo fieldInfo) {
-        this(index, objectStack, parentPathEntry, typeResolver, fieldInfo.name(), fieldInfo.type());
+        this(index, objectStack, parentPathEntry, typeResolver, TypeUtil.getSchemaAnnotation(fieldInfo), fieldInfo.name(), fieldInfo.type());
     }
 
     public FieldProcessor(WrappedIndexView index,
@@ -78,7 +79,7 @@ public class FieldProcessor {
                           TypeResolver typeResolver,
                           DataObjectDeque.PathEntry parentPathEntry,
                           Type type) {
-        this(index, objectStack, parentPathEntry, typeResolver, type.name().toString(), type);
+        this(index, objectStack, parentPathEntry, typeResolver, TypeUtil.getSchemaAnnotation(type), type.name().toString(), type);
     }
 
     public static Schema process(WrappedIndexView index,
