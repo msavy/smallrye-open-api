@@ -82,10 +82,6 @@ public class DataObjectDeque {
         return new PathEntry(null, annotationTarget, classInfo, classType, rootSchema);
     }
 
-    public PathEntry rootNode(Type classType, ClassInfo classInfo, Schema rootSchema) {
-        return new PathEntry(null, null, classInfo, classType, rootSchema);
-    }
-
     public PathEntry leafNode(PathEntry parentNode,
                               AnnotationTarget annotationTarget,
                               Type classType,
