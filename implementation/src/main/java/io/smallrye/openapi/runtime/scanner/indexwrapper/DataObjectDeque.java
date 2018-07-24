@@ -18,14 +18,18 @@ package io.smallrye.openapi.runtime.scanner.indexwrapper;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import javax.validation.constraints.NotNull;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 
 /**
+ * Deque for exploring object graph.
+ *
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
  */
 public class DataObjectDeque {
@@ -50,6 +54,11 @@ public class DataObjectDeque {
         return path.peek();
     }
 
+    /**
+     * Push entry to stack. Does not perform cycle detection.
+     *
+     * @param entry the entry
+     */
     public void push(PathEntry entry) {
         path.push(entry);
     }
@@ -58,6 +67,14 @@ public class DataObjectDeque {
         return path.pop();
     }
 
+    /**
+     * Create new entry and push to stack. Verifies
+     *
+     * @param annotationTarget annotation target
+     * @param parentPathEntry parent path entry
+     * @param type the annotated type
+     * @param schema the schema corresponding to this position
+     */
     public void push(AnnotationTarget annotationTarget,
                      @NotNull PathEntry parentPathEntry,
                      @NotNull Type type,
@@ -155,9 +172,27 @@ public class DataObjectDeque {
                 return false;
             }
 
-            PathEntry pair = (PathEntry) o;
+            PathEntry otherEntry = (PathEntry) o;
 
-            return clazz != null ? clazz.equals(pair.clazz) : pair.clazz == null;
+            boolean result = clazz != null ? clazz.equals(otherEntry.clazz) : otherEntry.clazz == null;
+
+            // For parameterized types, do a simple check of generic arguments to
+            // permit nested generic types like List<List<String>>.
+            if (this.clazzType.kind() == Type.Kind.PARAMETERIZED_TYPE &&
+                    otherEntry.clazzType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
+                return result && argsEqual(otherEntry);
+            }
+
+            return result;
+        }
+
+        private boolean argsEqual(PathEntry otherPair) {
+            ParameterizedType thisClazzPType = clazzType.asParameterizedType();
+            ParameterizedType otherClazzPType = otherPair.clazzType.asParameterizedType();
+
+            List<Type> thisArgs = thisClazzPType.arguments();
+            List<Type> otherArgs = otherClazzPType.arguments();
+            return thisArgs.equals(otherArgs);
         }
 
         @Override

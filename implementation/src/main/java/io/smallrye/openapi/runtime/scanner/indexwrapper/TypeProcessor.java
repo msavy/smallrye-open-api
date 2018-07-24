@@ -227,11 +227,8 @@ public class TypeProcessor {
         } else {
             LOG.infov("Attempting to do TYPE_VARIABLE substitution: {0} -> {1}", fieldType, resolvedType);
             if (index.containsClass(resolvedType)) {
-                // TODO: Cycle detection incorrectly sees cycle in same-class nested generic types (but with non-cyclic generic args).
-                // TODO: e.g. Foo<String, Foo<Integer, Integer> is not necessarily a cycle.
-                // TODO: This could be fixed by factoring generic args
-                DataObjectDeque.PathEntry entry = objectStack.leafNode(parentPathEntry, annotationTarget, resolvedType, schema);
-                objectStack.push(entry);
+                // Add resolved type to stack.
+                objectStack.push(annotationTarget, parentPathEntry, resolvedType, schema);
             } else {
                 LOG.infov("Class for type {0} not available", resolvedType);
             }
@@ -243,7 +240,6 @@ public class TypeProcessor {
         objectStack.push(annotationTarget, parentPathEntry, fieldType, schema);
     }
 
-    // TODO remove ClassInfo?
     private void pushToStack(Type resolvedType, Schema schema) {
         objectStack.push(annotationTarget, parentPathEntry, resolvedType, schema);
     }
