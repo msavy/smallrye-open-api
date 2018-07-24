@@ -123,20 +123,32 @@ public class DataObjectDeque {
      * @param type the annotated type
      * @param classInfo the root classInfo
      * @param rootSchema the schema corresponding to this position
-     * @return the path entry
+     * @return a new root node
      */
     public PathEntry rootNode(AnnotationTarget annotationTarget, ClassInfo classInfo, Type type, Schema rootSchema) {
         return new PathEntry(null, annotationTarget, classInfo, type, rootSchema);
     }
 
+    /**
+     * Create a leaf node (i.e. is attached to a parent)
+     *
+     * @param parentNode parent node
+     * @param annotationTarget annotation target
+     * @param classType the class type
+     * @param schema the schema
+     * @return the new leaf node
+     */
     public PathEntry leafNode(PathEntry parentNode,
                               AnnotationTarget annotationTarget,
                               Type classType,
-                              Schema rootSchema) {
+                              Schema schema) {
         ClassInfo classInfo = index.getClass(classType);
-        return new PathEntry(parentNode, annotationTarget, classInfo, classType, rootSchema);
+        return new PathEntry(parentNode, annotationTarget, classInfo, classType, schema);
     }
 
+    /**
+     * An entry on the object stack.
+     */
     public static final class PathEntry {
         private final PathEntry enclosing;
         private final AnnotationTarget annotationTarget;
@@ -146,7 +158,7 @@ public class DataObjectDeque {
         // May be changed
         private Schema schema;
 
-        PathEntry(PathEntry enclosing,
+        private PathEntry(PathEntry enclosing,
                   AnnotationTarget annotationTarget,
                   @NotNull ClassInfo clazz,
                   @NotNull Type clazzType,
@@ -232,14 +244,14 @@ public class DataObjectDeque {
 
         @Override
         public String toString() {
-            return "Pair{" +
+            return "PathEntry{" +
                     "clazz=" + clazz +
                     ", schema=" + schema +
                     '}';
         }
 
-        String toStringWithGraph() {
-            return "Pair{" +
+        public String toStringWithGraph() {
+            return "PathEntry{" +
                     "clazz=" + clazz +
                     ", schema=" + schema +
                     ", parent=" + (enclosing != null ? enclosing.toStringWithGraph() : "<root>") + "}";
