@@ -13,11 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.smallrye.openapi.runtime.scanner.indexwrapper;
+package io.smallrye.openapi.runtime.scanner.dataobject;
 
 import io.smallrye.openapi.api.OpenApiConstants;
 import io.smallrye.openapi.api.models.media.SchemaImpl;
-import io.smallrye.openapi.runtime.scanner.TypeResolver;
 import io.smallrye.openapi.runtime.util.JandexUtil;
 import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
@@ -33,62 +32,73 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ * Process annotation targets.
+ *
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
  */
-public class FieldProcessor {
-    private static final Logger LOG = Logger.getLogger(FieldProcessor.class);
+public class AnnotationTargetProcessor {
+    private static final Logger LOG = Logger.getLogger(AnnotationTargetProcessor.class);
 
     private final WrappedIndexView index;
     private final DataObjectDeque objectStack;
     private final DataObjectDeque.PathEntry parentPathEntry;
     private final TypeResolver typeResolver;
-    private final String fieldName;
-    private final Type fieldType;
+    private final String entityName;
+    private final Type entityType;
 
     // This can be overridden.
     private Schema fieldSchema;
     // May be null if field is unannotated.
     private AnnotationTarget annotationTarget;
 
-    public FieldProcessor(WrappedIndexView index,
-                          DataObjectDeque objectStack,
-                          DataObjectDeque.PathEntry parentPathEntry,
-                          TypeResolver typeResolver,
-                          AnnotationTarget annotationTarget,
-                          String entityName,
-                          Type entityType) {
+    public AnnotationTargetProcessor(WrappedIndexView index,
+                                     DataObjectDeque objectStack,
+                                     DataObjectDeque.PathEntry parentPathEntry,
+                                     TypeResolver typeResolver,
+                                     AnnotationTarget annotationTarget,
+                                     String entityName,
+                                     Type entityType) {
         this.index = index;
         this.objectStack = objectStack;
         this.parentPathEntry = parentPathEntry;
         this.typeResolver = typeResolver;
-        this.fieldName = entityName;
-        this.fieldType = entityType;
+        this.entityName = entityName;
+        this.entityType = entityType;
         this.annotationTarget = annotationTarget;
         this.fieldSchema = new SchemaImpl();
     }
 
-    public FieldProcessor(WrappedIndexView index,
-                          DataObjectDeque objectStack,
-                          TypeResolver typeResolver,
-                          DataObjectDeque.PathEntry parentPathEntry,
-                          FieldInfo fieldInfo) {
+    public AnnotationTargetProcessor(WrappedIndexView index,
+                                     DataObjectDeque objectStack,
+                                     TypeResolver typeResolver,
+                                     DataObjectDeque.PathEntry parentPathEntry,
+                                     FieldInfo fieldInfo) {
         this(index, objectStack, parentPathEntry, typeResolver, fieldInfo, fieldInfo.name(), fieldInfo.type());
     }
 
-    public FieldProcessor(WrappedIndexView index,
-                          DataObjectDeque objectStack,
-                          TypeResolver typeResolver,
-                          DataObjectDeque.PathEntry parentPathEntry,
-                          Type type) {
+    public AnnotationTargetProcessor(WrappedIndexView index,
+                                     DataObjectDeque objectStack,
+                                     TypeResolver typeResolver,
+                                     DataObjectDeque.PathEntry parentPathEntry,
+                                     Type type) {
         this(index, objectStack, parentPathEntry, typeResolver, index.getClass(type), type.name().toString(), type);
     }
 
     public static Schema process(WrappedIndexView index,
-                          DataObjectDeque path,
-                          TypeResolver resolver,
+                          DataObjectDeque objectStack,
+                          TypeResolver typeResolver,
                           DataObjectDeque.PathEntry parentPathEntry,
                           FieldInfo field) {
-        FieldProcessor fp = new FieldProcessor(index, path, resolver, parentPathEntry, field);
+        AnnotationTargetProcessor fp = new AnnotationTargetProcessor(index, objectStack, typeResolver, parentPathEntry, field);
+        return fp.processField();
+    }
+
+    public static Schema process(WrappedIndexView index,
+                                 DataObjectDeque objectStack,
+                                 TypeResolver typeResolver,
+                                 DataObjectDeque.PathEntry parentPathEntry,
+                                 Type type) {
+        AnnotationTargetProcessor fp = new AnnotationTargetProcessor(index, objectStack, typeResolver, parentPathEntry, type);
         return fp.processField();
     }
 
@@ -102,7 +112,7 @@ public class FieldProcessor {
             // Handle field annotated with @Schema.
             readSchemaAnnotatedField(schemaAnnotation);
         }
-        parentPathEntry.getSchema().addProperty(fieldName, fieldSchema);
+        parentPathEntry.getSchema().addProperty(entityName, fieldSchema);
         return fieldSchema;
     }
 
@@ -111,7 +121,7 @@ public class FieldProcessor {
             throw new IllegalArgumentException("Annotation must not be null");
         }
 
-        LOG.infov("Processing @Schema annotation {0} on a field {1}", annotation, fieldName);
+        LOG.infov("Processing @Schema annotation {0} on a field {1}", annotation, entityName);
 
         // Schemas can be hidden. Skip if that's the case.
         Boolean isHidden = JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_HIDDEN);
@@ -122,11 +132,11 @@ public class FieldProcessor {
         // If "required" attribute is on field. It should be applied to the *parent* schema.
         // Required is false by default.
         if (JandexUtil.booleanValueWithDefault(annotation, OpenApiConstants.PROP_REQUIRED)) {
-            parentPathEntry.getSchema().addRequired(fieldName);
+            parentPathEntry.getSchema().addRequired(entityName);
         }
 
-        // Type could be replaced (e.g. generics). TODO too many args
-        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, fieldType, fieldSchema, annotationTarget);
+        // Type could be replaced (e.g. generics).
+        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, entityType, fieldSchema, annotationTarget);
 
         Type postProcessedField = typeProcessor.processType();
         fieldSchema = typeProcessor.getSchema();
@@ -143,9 +153,9 @@ public class FieldProcessor {
     }
 
     private void readUnannotatedField() {
-        LOG.infov("Processing unannotated field {0}", fieldType);
+        LOG.infov("Processing unannotated field {0}", entityType);
 
-        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, fieldType, fieldSchema, annotationTarget);
+        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, entityType, fieldSchema, annotationTarget);
 
         Type postProcessedField = typeProcessor.processType();
         fieldSchema = typeProcessor.getSchema();

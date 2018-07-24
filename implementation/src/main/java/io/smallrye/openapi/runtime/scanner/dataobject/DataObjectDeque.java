@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.smallrye.openapi.runtime.scanner.indexwrapper;
+package io.smallrye.openapi.runtime.scanner.dataobject;
 
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationTarget;
@@ -42,14 +42,28 @@ public class DataObjectDeque {
         this.index = index;
     }
 
+    /**
+     * @see Deque#size()
+     * @return the number of elements in this Deque
+     */
     public int size() {
         return path.size();
     }
 
+    /**
+     * @see Deque#isEmpty()
+     * @return true if no elements in this Deque
+     */
     public boolean isEmpty() {
         return path.isEmpty();
     }
 
+    /**
+     * Look at top of stack, but don't remove.
+     *
+     * @see Deque#peek()
+     * @return the top element of the stack
+     */
     public PathEntry peek() {
         return path.peek();
     }
@@ -57,18 +71,25 @@ public class DataObjectDeque {
     /**
      * Push entry to stack. Does not perform cycle detection.
      *
+     * @see Deque#push(Object)
      * @param entry the entry
      */
     public void push(PathEntry entry) {
         path.push(entry);
     }
 
+    /**
+     * Remove and return top element from stack.
+     *
+     * @see Deque#pop()
+     * @return the top element of the stack
+     */
     public PathEntry pop() {
         return path.pop();
     }
 
     /**
-     * Create new entry and push to stack. Verifies
+     * Create new entry and push to stack. Performs cycle detection.
      *
      * @param annotationTarget annotation target
      * @param parentPathEntry parent path entry
@@ -95,8 +116,17 @@ public class DataObjectDeque {
         }
     }
 
-    public PathEntry rootNode(AnnotationTarget annotationTarget, Type classType, ClassInfo classInfo, Schema rootSchema) {
-        return new PathEntry(null, annotationTarget, classInfo, classType, rootSchema);
+    /**
+     * Create a root node (first entry in graph).
+     *
+     * @param annotationTarget annotation target
+     * @param type the annotated type
+     * @param classInfo the root classInfo
+     * @param rootSchema the schema corresponding to this position
+     * @return the path entry
+     */
+    public PathEntry rootNode(AnnotationTarget annotationTarget, ClassInfo classInfo, Type type, Schema rootSchema) {
+        return new PathEntry(null, annotationTarget, classInfo, type, rootSchema);
     }
 
     public PathEntry leafNode(PathEntry parentNode,

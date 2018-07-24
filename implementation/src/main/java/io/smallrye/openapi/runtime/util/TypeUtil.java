@@ -215,7 +215,7 @@ public class TypeUtil {
         }
     }
 
-    public static Type resolveWildcard(WildcardType wildcardType) { // TODO move to typeutil?
+    public static Type resolveWildcard(WildcardType wildcardType) {
         return TypeUtil.getBound(wildcardType);
     }
 

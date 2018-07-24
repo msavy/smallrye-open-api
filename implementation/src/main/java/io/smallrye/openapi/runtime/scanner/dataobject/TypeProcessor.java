@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.smallrye.openapi.runtime.scanner.indexwrapper;
+package io.smallrye.openapi.runtime.scanner.dataobject;
 
 import io.smallrye.openapi.api.models.media.SchemaImpl;
-import io.smallrye.openapi.runtime.scanner.TypeResolver;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationTarget;
@@ -35,6 +34,8 @@ import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.OBJEC
 import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.STRING_TYPE;
 
 /**
+ * Process {@link Type} instances.
+ *
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
  */
 public class TypeProcessor {
@@ -193,7 +194,6 @@ public class TypeProcessor {
             }
             return OBJECT_TYPE;
         } else {
-            // TODO is a index.contains check necessary?
             // This type will be resolved later, if necessary.
             pushToStack(pType);
             return pType;

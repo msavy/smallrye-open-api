@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.smallrye.openapi.runtime.scanner.indexwrapper;
+package io.smallrye.openapi.runtime.scanner.dataobject;
 
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.jboss.jandex.AnnotationInstance;

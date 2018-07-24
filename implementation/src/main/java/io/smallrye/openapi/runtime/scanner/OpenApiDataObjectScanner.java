@@ -16,9 +16,11 @@
 package io.smallrye.openapi.runtime.scanner;
 
 import io.smallrye.openapi.api.models.media.SchemaImpl;
-import io.smallrye.openapi.runtime.scanner.indexwrapper.DataObjectDeque;
-import io.smallrye.openapi.runtime.scanner.indexwrapper.FieldProcessor;
-import io.smallrye.openapi.runtime.scanner.indexwrapper.WrappedIndexView;
+import io.smallrye.openapi.runtime.scanner.dataobject.DataObjectDeque;
+import io.smallrye.openapi.runtime.scanner.dataobject.AnnotationTargetProcessor;
+import io.smallrye.openapi.runtime.scanner.dataobject.IgnoreResolver;
+import io.smallrye.openapi.runtime.scanner.dataobject.TypeResolver;
+import io.smallrye.openapi.runtime.scanner.dataobject.WrappedIndexView;
 import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.models.media.Schema;
@@ -175,7 +177,7 @@ public class OpenApiDataObjectScanner {
         }
 
         // Create root node.
-        DataObjectDeque.PathEntry root = objectStack.rootNode(rootAnnotationTarget, rootClassType, rootClassInfo, rootSchema);
+        DataObjectDeque.PathEntry root = objectStack.rootNode(rootAnnotationTarget, rootClassInfo, rootClassType, rootSchema);
 
         // For certain special types (map, list, etc) we need to do some pre-processing.
         if (isSpecialType(rootClassType)) {
@@ -200,8 +202,7 @@ public class OpenApiDataObjectScanner {
             Type currentType = currentPathEntry.getClazzType();
 
             // First, handle class annotations.
-            currentSchema = readKlass(currentClass, currentSchema);
-            currentPathEntry.setSchema(currentSchema);
+            currentPathEntry.setSchema(readKlass(currentClass, currentSchema));
 
             LOG.infov("Getting all fields for: {0} in class: {1}", currentType, currentClass);
 
@@ -215,7 +216,7 @@ public class OpenApiDataObjectScanner {
                 // Ignore static fields and fields annotated with ignore.
                 if (!Modifier.isStatic(field.flags()) && !ignoreResolver.isIgnore(field, currentPathEntry)) {
                     LOG.infov("Iterating field {0}", field);
-                    FieldProcessor.process(index, objectStack, resolver, currentPathEntry, field);
+                    AnnotationTargetProcessor.process(index, objectStack, resolver, currentPathEntry, field);
                 }
             }
 
@@ -240,8 +241,7 @@ public class OpenApiDataObjectScanner {
     }
 
     private Schema preProcessSpecial(Type type, TypeResolver typeResolver, DataObjectDeque.PathEntry currentPathEntry) {
-        FieldProcessor fieldProcessor = new FieldProcessor(index, objectStack, typeResolver, currentPathEntry, type);
-        return fieldProcessor.processField();
+        return AnnotationTargetProcessor.process(index, objectStack, typeResolver, currentPathEntry, type);
     }
 
     private boolean isA(Type testSubject, Type test) {
