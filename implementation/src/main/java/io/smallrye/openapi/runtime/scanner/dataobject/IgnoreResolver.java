@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreType;
 import io.smallrye.openapi.api.OpenApiConstants;
 import io.smallrye.openapi.runtime.scanner.dataobject.DataObjectDeque.PathEntry;
 import io.smallrye.openapi.runtime.util.JandexUtil;
+import io.smallrye.openapi.runtime.util.SchemaFactory;
 import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
@@ -33,6 +34,7 @@ import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -55,7 +57,8 @@ public class IgnoreResolver {
                 new JsonbTransientHandler(),
                 new JsonIgnorePropertiesHandler(),
                 new JsonIgnoreHandler(),
-                new JsonIgnoreTypeHandler()
+                new JsonIgnoreTypeHandler(),
+                new TransientIgnoreHandler()
         };
 
         for (IgnoreAnnotationHandler handler : ignoreHandlers) {
@@ -248,6 +251,36 @@ public class IgnoreResolver {
         @Override
         public DotName getName() {
             return DotName.createSimple(JsonIgnoreType.class.getName());
+        }
+    }
+
+    private final class TransientIgnoreHandler implements IgnoreAnnotationHandler {
+
+        @Override
+        public boolean shouldIgnore(AnnotationTarget target, PathEntry parentPathEntry) {
+            if (target.kind() == AnnotationTarget.Kind.FIELD) {
+                FieldInfo field = target.asField();
+                // If field has transient modifier, e.g. `transient String foo;`, then hide it.
+                if (Modifier.isTransient(field.flags())) {
+                    // Unless field is annotated with @Schema to explicitly un-hide it.
+                    AnnotationInstance schemaAnnotation = TypeUtil.getSchemaAnnotation(target);
+                    if (schemaAnnotation != null) {
+                        Boolean boolVal = JandexUtil.booleanValue(schemaAnnotation, OpenApiConstants.PROP_HIDDEN);
+                        if (boolVal == null) {
+                            return true;
+                        } else {
+                            return boolVal;
+                        }
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public DotName getName() {
+            return DotName.createSimple(TransientIgnoreHandler.class.getName());
         }
     }
 
