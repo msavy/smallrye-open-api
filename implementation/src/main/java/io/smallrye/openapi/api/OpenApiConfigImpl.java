@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2018 Red Hat, Inc, and individual contributors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 package io.smallrye.openapi.api;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.microprofile.config.Config;
@@ -214,6 +215,13 @@ public class OpenApiConfigImpl implements OpenApiConfig {
                     .getOptionalValue(OpenApiConstants.CUSTOM_SCHEMA_REGISTRY_CLASS, String.class).orElse(null);
         }
         return customSchemaRegistryClass;
+    }
+
+    @Override
+    public String customTypeMapping(String fqcn) {
+        return getConfig()
+                .getOptionalValue(OpenApiConstants.CUSTOM_TYPE_MAPPINGS_PREFIX + fqcn, String.class)
+                .orElse(null);
     }
 
     private static Set<String> asCsvSet(String items) {

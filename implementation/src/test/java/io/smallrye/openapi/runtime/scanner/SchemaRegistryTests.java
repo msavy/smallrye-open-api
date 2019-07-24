@@ -123,7 +123,7 @@ public class SchemaRegistryTests extends IndexScannerTestBase {
         ClassInfo cInfo = index.getClassByName(cName);
 
         Type n6Type = cInfo.field("n6").type();
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, n6Type);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, n6Type);
 
         Schema result = scanner.process();
         registry.register(n6Type, result);

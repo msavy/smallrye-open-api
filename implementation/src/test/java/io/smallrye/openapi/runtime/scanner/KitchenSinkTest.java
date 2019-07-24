@@ -46,7 +46,7 @@ public class KitchenSinkTest extends OpenApiDataObjectScannerTestBase {
     @Test
     public void testKitchenSink() throws IOException {
         DotName kitchenSink = DotName.createSimple(KitchenSink.class.getName());
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index,
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index,
                 ClassType.create(kitchenSink, Type.Kind.CLASS));
 
         LOG.debugv("Scanning top-level entity: {0}", KitchenSink.class.getName());
@@ -64,7 +64,7 @@ public class KitchenSinkTest extends OpenApiDataObjectScannerTestBase {
         Type pType = getFieldFromKlazz(KitchenSink.class.getName(), "simpleParameterizedType").type();
 
         LOG.debugv("Scanning top-level entity: {0}", pType);
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, pType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, pType);
         printToConsole("KustomPair", scanner.process());
     }
 
@@ -72,7 +72,7 @@ public class KitchenSinkTest extends OpenApiDataObjectScannerTestBase {
     public void testKitchenSinkWithRefs() throws IOException, JSONException {
         DotName name = componentize(KitchenSink.class.getName());
         Type type = ClassType.create(name, Type.Kind.CLASS);
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, type);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, type);
         OpenAPIImpl oai = new OpenAPIImpl();
         SchemaRegistry registry = SchemaRegistry.newInstance(nestingSupportConfig(), oai, index);
 

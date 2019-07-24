@@ -22,6 +22,7 @@ import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.MAP_T
 import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.OBJECT_TYPE;
 import static io.smallrye.openapi.runtime.scanner.OpenApiDataObjectScanner.STRING_TYPE;
 
+import io.smallrye.openapi.api.OpenApiConfig;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ArrayType;
@@ -44,6 +45,7 @@ public class TypeProcessor {
     private static final Logger LOG = Logger.getLogger(TypeProcessor.class);
 
     private final Schema schema;
+    private final OpenApiConfig openApiConfig;
     private final AugmentedIndexView index;
     private final AnnotationTarget annotationTarget;
     private final DataObjectDeque objectStack;
@@ -53,12 +55,14 @@ public class TypeProcessor {
     // Type may be changed.
     private Type type;
 
-    public TypeProcessor(AugmentedIndexView index,
-            DataObjectDeque objectStack,
-            DataObjectDeque.PathEntry parentPathEntry, TypeResolver typeResolver,
-            Type type,
-            Schema schema,
-            AnnotationTarget annotationTarget) {
+    public TypeProcessor(OpenApiConfig openApiConfig,
+                         AugmentedIndexView index,
+                         DataObjectDeque objectStack,
+                         DataObjectDeque.PathEntry parentPathEntry, TypeResolver typeResolver,
+                         Type type,
+                         Schema schema,
+                         AnnotationTarget annotationTarget) {
+        this.openApiConfig = openApiConfig;
         this.objectStack = objectStack;
         this.typeResolver = typeResolver;
         this.parentPathEntry = parentPathEntry;
@@ -93,7 +97,7 @@ public class TypeProcessor {
             schema.type(Schema.SchemaType.ARRAY);
 
             // Only use component (excludes the special name formatting for arrays).
-            TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(arrayType.component());
+            TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(openApiConfig, arrayType.component());
             arrSchema.setType(typeFormat.getSchemaType());
             arrSchema.setFormat(typeFormat.getFormat().format());
 
@@ -162,7 +166,7 @@ public class TypeProcessor {
             Type arg = pType.arguments().get(0);
 
             if (isTerminalType(arg)) {
-                TypeUtil.TypeWithFormat terminalType = TypeUtil.getTypeFormat(arg);
+                TypeUtil.TypeWithFormat terminalType = TypeUtil.getTypeFormat(openApiConfig, arg);
                 arraySchema.type(terminalType.getSchemaType());
                 arraySchema.format(terminalType.getFormat().format());
             } else {
@@ -180,7 +184,7 @@ public class TypeProcessor {
                 Type valueType = pType.arguments().get(1);
                 Schema propsSchema = new SchemaImpl();
                 if (isTerminalType(valueType)) {
-                    TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(valueType);
+                    TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(openApiConfig, valueType);
                     propsSchema.setType(tf.getSchemaType());
                     propsSchema.setFormat(tf.getFormat().format());
                 } else {
@@ -253,7 +257,7 @@ public class TypeProcessor {
         LOG.debugv("Resolved type {0} -> {1}", fieldType, resolvedType);
         if (isTerminalType(resolvedType) || !index.containsClass(resolvedType)) {
             LOG.debugv("Is a terminal type {0}", resolvedType);
-            TypeUtil.TypeWithFormat replacement = TypeUtil.getTypeFormat(resolvedType);
+            TypeUtil.TypeWithFormat replacement = TypeUtil.getTypeFormat(openApiConfig, resolvedType);
             schema.setType(replacement.getSchemaType());
             schema.setFormat(replacement.getFormat().format());
         } else {
@@ -292,7 +296,7 @@ public class TypeProcessor {
             return true;
         }
 
-        TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(type);
+        TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(openApiConfig, type);
         // If is known type.
         return tf.getSchemaType() != Schema.SchemaType.OBJECT &&
                 tf.getSchemaType() != Schema.SchemaType.ARRAY;

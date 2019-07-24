@@ -96,7 +96,10 @@ public class OpenApiDocument {
     }
 
     public synchronized void config(OpenApiConfig config) {
-        set(() -> this.config = config);
+        set(() -> {
+            this.config = config;
+
+        });
     }
 
     public void modelFromAnnotations(OpenAPI model) {

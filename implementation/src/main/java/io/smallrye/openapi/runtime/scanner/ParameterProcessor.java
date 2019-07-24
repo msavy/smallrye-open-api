@@ -39,6 +39,7 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import io.smallrye.openapi.api.OpenApiConfig;
 import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.media.Schema;
@@ -88,6 +89,7 @@ public class ParameterProcessor {
     private static Set<DotName> openApiParameterAnnotations = new HashSet<>(Arrays.asList(DOTNAME_PARAMETER,
             DOTNAME_PARAMETERS));
 
+    private final OpenApiConfig openApiConfig;
     private final IndexView index;
     private final Function<AnnotationInstance, ParameterImpl> reader;
     private final List<AnnotationScannerExtension> extensions;
@@ -284,9 +286,11 @@ public class ParameterProcessor {
         }
     }
 
-    private ParameterProcessor(IndexView index,
+    private ParameterProcessor(OpenApiConfig openApiConfig,
+            IndexView index,
             Function<AnnotationInstance, ParameterImpl> reader,
             List<AnnotationScannerExtension> extensions) {
+        this.openApiConfig = openApiConfig;
         this.index = index;
         this.reader = reader;
         this.extensions = extensions;
@@ -308,14 +312,15 @@ public class ParameterProcessor {
      * @return scanned parameters and modified path contained in a {@link ResourceParameters}
      *         object
      */
-    public static ResourceParameters process(IndexView index,
-            ClassInfo resourceClass,
-            MethodInfo resourceMethod,
-            Function<AnnotationInstance, ParameterImpl> reader,
-            List<AnnotationScannerExtension> extensions) {
+    public static ResourceParameters process(OpenApiConfig openApiConfig,
+                                             IndexView index,
+                                             ClassInfo resourceClass,
+                                             MethodInfo resourceMethod,
+                                             Function<AnnotationInstance, ParameterImpl> reader,
+                                             List<AnnotationScannerExtension> extensions) {
 
         ResourceParameters parameters = new ResourceParameters();
-        ParameterProcessor processor = new ParameterProcessor(index, reader, extensions);
+        ParameterProcessor processor = new ParameterProcessor(openApiConfig, index, reader, extensions);
 
         // Phase I - Read class fields, constructors, "setter" methods not annotated with JAX-RS HTTP method
         processor.readParameters(resourceClass, null);
@@ -492,7 +497,7 @@ public class ParameterProcessor {
             }
 
             if (!ModelUtil.parameterHasSchema(param) && context.targetType != null) {
-                Schema schema = SchemaFactory.typeToSchema(index, context.targetType, extensions);
+                Schema schema = SchemaFactory.typeToSchema(openApiConfig, index, context.targetType, extensions);
                 ModelUtil.setParameterSchema(param, schema);
             }
 
@@ -559,7 +564,7 @@ public class ParameterProcessor {
             String paramName = param.getKey();
             AnnotationTarget paramTarget = param.getValue().target();
             Type paramType = getType(paramTarget);
-            Schema paramSchema = SchemaFactory.typeToSchema(index, paramType, extensions);
+            Schema paramSchema = SchemaFactory.typeToSchema(openApiConfig, index, paramType, extensions);
             Object defaultValue = getDefaultValue(paramTarget);
 
             if (paramSchema.getDefaultValue() == null) {

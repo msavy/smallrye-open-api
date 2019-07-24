@@ -49,7 +49,7 @@ public class ExpectationWithRefsTests extends OpenApiDataObjectScannerTestBase {
     private void testAssertion(Class<?> target, String expectedResourceName) throws IOException, JSONException {
         DotName name = componentize(target.getName());
         Type type = ClassType.create(name, Type.Kind.CLASS);
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, type);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, type);
 
         Schema result = scanner.process();
         registry.register(type, result);
@@ -65,7 +65,7 @@ public class ExpectationWithRefsTests extends OpenApiDataObjectScannerTestBase {
         String containerName = containerClass.getName();
         Type parentType = getFieldFromKlazz(containerName, targetField).type();
 
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, parentType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, parentType);
 
         Schema result = scanner.process();
         registry.register(parentType, result);

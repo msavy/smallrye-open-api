@@ -33,7 +33,7 @@ public class SpecialCaseTests extends OpenApiDataObjectScannerTestBase {
     public void testCollection_SimpleTerminalType() throws IOException, JSONException {
         String name = SpecialCaseTestContainer.class.getName();
         Type pType = getFieldFromKlazz(name, "listOfString").type();
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, pType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, pType);
 
         Schema result = scanner.process();
 
@@ -45,7 +45,7 @@ public class SpecialCaseTests extends OpenApiDataObjectScannerTestBase {
     public void testCollection_DataObjectList() throws IOException, JSONException {
         String name = SpecialCaseTestContainer.class.getName();
         Type pType = getFieldFromKlazz(name, "ccList").type();
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, pType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, pType);
 
         Schema result = scanner.process();
 
@@ -57,7 +57,7 @@ public class SpecialCaseTests extends OpenApiDataObjectScannerTestBase {
     public void testCollection_WildcardWithSuperBound() throws IOException, JSONException {
         String name = SpecialCaseTestContainer.class.getName();
         Type pType = getFieldFromKlazz(name, "listSuperFlight").type();
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, pType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, pType);
 
         Schema result = scanner.process();
 
@@ -69,7 +69,7 @@ public class SpecialCaseTests extends OpenApiDataObjectScannerTestBase {
     public void testCollection_WildcardWithExtendBound() throws IOException, JSONException {
         String name = SpecialCaseTestContainer.class.getName();
         Type pType = getFieldFromKlazz(name, "listExtendsFoo").type();
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, pType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, pType);
 
         Schema result = scanner.process();
 
@@ -81,7 +81,7 @@ public class SpecialCaseTests extends OpenApiDataObjectScannerTestBase {
     public void testCollection_Wildcard() throws IOException, JSONException {
         String name = SpecialCaseTestContainer.class.getName();
         Type pType = getFieldFromKlazz(name, "listOfAnything").type();
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, pType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, pType);
 
         Schema result = scanner.process();
 

@@ -56,4 +56,5 @@ public interface OpenApiConfig {
 
     public String customSchemaRegistryClass();
 
+    public String customTypeMapping(String fqcn);
 }

@@ -41,7 +41,7 @@ public class NestedSchemaReferenceTests extends OpenApiDataObjectScannerTestBase
         OpenAPIImpl oai = new OpenAPIImpl();
         SchemaRegistry registry = SchemaRegistry.newInstance(nestingSupportConfig(), oai, index);
 
-        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(index, parentType);
+        OpenApiDataObjectScanner scanner = new OpenApiDataObjectScanner(emptyConfig(), index, parentType);
 
         Schema result = scanner.process();
         registry.register(parentType, result);

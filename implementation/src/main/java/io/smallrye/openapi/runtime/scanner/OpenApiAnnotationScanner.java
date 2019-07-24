@@ -479,7 +479,7 @@ public class OpenApiAnnotationScanner {
 
         // Process @Parameter annotations
         /////////////////////////////////////////
-        ResourceParameters params = ParameterProcessor.process(index, resource, method, this::readParameter, extensions);
+        ResourceParameters params = ParameterProcessor.process(config, index, resource, method, this::readParameter, extensions);
 
         operation.setParameters(params.getOperationParameters());
         pathItem.setParameters(params.getPathItemParameters());
@@ -503,7 +503,7 @@ public class OpenApiAnnotationScanner {
                     requestBodyType = JandexUtil.getRequestBodyParameterClassType(method, extensions);
                 }
                 if (requestBodyType != null) {
-                    Schema schema = SchemaFactory.typeToSchema(index, requestBodyType, extensions);
+                    Schema schema = SchemaFactory.typeToSchema(config, index, requestBodyType, extensions);
                     ModelUtil.setRequestBodySchema(requestBody, schema, currentConsumes);
                 }
             }
@@ -523,7 +523,7 @@ public class OpenApiAnnotationScanner {
                 Type requestBodyType = JandexUtil.getRequestBodyParameterClassType(method, extensions);
 
                 if (requestBodyType != null) {
-                    Schema schema = SchemaFactory.typeToSchema(index, requestBodyType, extensions);
+                    Schema schema = SchemaFactory.typeToSchema(config, index, requestBodyType, extensions);
                     if (schema != null) {
                         RequestBody requestBody = new RequestBodyImpl();
                         ModelUtil.setRequestBodySchema(requestBody, schema, currentConsumes);
@@ -727,7 +727,7 @@ public class OpenApiAnnotationScanner {
             response = new APIResponseImpl().description(description);
             responses.addAPIResponse(code, response);
         } else {
-            schema = SchemaFactory.typeToSchema(index, returnType, extensions);
+            schema = SchemaFactory.typeToSchema(config, index, returnType, extensions);
             responses = ModelUtil.responses(operation);
             response = new APIResponseImpl().description("OK");
             content = new ContentImpl();
@@ -1269,7 +1269,7 @@ public class OpenApiAnnotationScanner {
         LOG.debug("Processing a single @Header annotation.");
         Header header = new HeaderImpl();
         header.setDescription(JandexUtil.stringValue(annotation, OpenApiConstants.PROP_DESCRIPTION));
-        header.setSchema(SchemaFactory.readSchema(index, annotation.value(OpenApiConstants.PROP_SCHEMA)));
+        header.setSchema(SchemaFactory.readSchema(config, index, annotation.value(OpenApiConstants.PROP_SCHEMA)));
         header.setRequired(JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_REQUIRED));
         header.setDeprecated(JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_DEPRECATED));
         header.setAllowEmptyValue(JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_ALLOW_EMPTY_VALUE));
@@ -1403,7 +1403,7 @@ public class OpenApiAnnotationScanner {
         parameter.setExplode(readExplode(JandexUtil.enumValue(annotation, OpenApiConstants.PROP_EXPLODE,
                 org.eclipse.microprofile.openapi.annotations.enums.Explode.class)));
         parameter.setAllowReserved(JandexUtil.booleanValue(annotation, OpenApiConstants.PROP_ALLOW_RESERVED));
-        parameter.setSchema(SchemaFactory.readSchema(index, annotation.value(OpenApiConstants.PROP_SCHEMA)));
+        parameter.setSchema(SchemaFactory.readSchema(config, index, annotation.value(OpenApiConstants.PROP_SCHEMA)));
         parameter.setContent(readContent(annotation.value(OpenApiConstants.PROP_CONTENT), ContentDirection.Parameter));
         parameter.setExamples(readExamples(annotation.value(OpenApiConstants.PROP_EXAMPLES)));
         parameter.setExample(JandexUtil.stringValue(annotation, OpenApiConstants.PROP_EXAMPLE));
@@ -1478,7 +1478,7 @@ public class OpenApiAnnotationScanner {
         MediaType mediaType = new MediaTypeImpl();
         mediaType.setExamples(readExamples(annotation.value(OpenApiConstants.PROP_EXAMPLES)));
         mediaType.setExample(JandexUtil.stringValue(annotation, OpenApiConstants.PROP_EXAMPLE));
-        mediaType.setSchema(SchemaFactory.readSchema(index, annotation.value(OpenApiConstants.PROP_SCHEMA)));
+        mediaType.setSchema(SchemaFactory.readSchema(config, index, annotation.value(OpenApiConstants.PROP_SCHEMA)));
         mediaType.setEncoding(readEncodings(annotation.value(OpenApiConstants.PROP_ENCODING)));
         return mediaType;
     }
@@ -1645,7 +1645,7 @@ public class OpenApiAnnotationScanner {
              * {@link org.eclipse.microprofile.openapi.annotations.Components}.
              */
             if (name != null) {
-                map.put(name, SchemaFactory.readSchema(index, nested));
+                map.put(name, SchemaFactory.readSchema(config, index, nested));
             } /*-
               //For consideration - be more lenient and attempt to use the name from the implementation's @Schema?
               else {

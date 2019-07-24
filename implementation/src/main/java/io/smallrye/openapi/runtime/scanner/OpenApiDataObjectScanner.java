@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
+import io.smallrye.openapi.api.OpenApiConfig;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -97,6 +98,7 @@ public class OpenApiDataObjectScanner {
     private final Type rootClassType;
     private final ClassInfo rootClassInfo;
     private final TypeUtil.TypeWithFormat rootClassTypeFormat;
+    private final OpenApiConfig openApiConfig;
     private final AugmentedIndexView index;
     private final DataObjectDeque objectStack;
     private final IgnoreResolver ignoreResolver;
@@ -109,22 +111,24 @@ public class OpenApiDataObjectScanner {
      * @param _index index of types to scan
      * @param classType root to begin scan
      */
-    public OpenApiDataObjectScanner(IndexView _index, Type classType) {
+    public OpenApiDataObjectScanner(OpenApiConfig openApiConfig, IndexView _index, Type classType) {
+        this.openApiConfig = openApiConfig;
         this.index = new AugmentedIndexView(_index);
         this.objectStack = new DataObjectDeque(index);
         this.ignoreResolver = new IgnoreResolver(index);
         this.rootClassType = classType;
-        this.rootClassTypeFormat = TypeUtil.getTypeFormat(classType);
+        this.rootClassTypeFormat = TypeUtil.getTypeFormat(openApiConfig, classType);
         this.rootSchema = new SchemaImpl();
         this.rootClassInfo = initialType(classType);
     }
 
-    OpenApiDataObjectScanner(IndexView _index, AnnotationTarget annotationTarget, Type classType) {
+    OpenApiDataObjectScanner(OpenApiConfig openApiConfig, IndexView _index, AnnotationTarget annotationTarget, Type classType) {
+        this.openApiConfig = openApiConfig;
         this.index = new AugmentedIndexView(_index);
         this.objectStack = new DataObjectDeque(index);
         this.ignoreResolver = new IgnoreResolver(index);
         this.rootClassType = classType;
-        this.rootClassTypeFormat = TypeUtil.getTypeFormat(classType);
+        this.rootClassTypeFormat = TypeUtil.getTypeFormat(openApiConfig, classType);
         this.rootSchema = new SchemaImpl();
         this.rootClassInfo = initialType(classType);
         this.rootAnnotationTarget = annotationTarget;
@@ -137,8 +141,8 @@ public class OpenApiDataObjectScanner {
      * @param type root to begin scan
      * @return the OAI schema
      */
-    public static Schema process(IndexView index, Type type) {
-        return new OpenApiDataObjectScanner(index, type).process();
+    public static Schema process(OpenApiConfig openApiConfig, IndexView index, Type type) {
+        return new OpenApiDataObjectScanner(openApiConfig, index, type).process();
     }
 
     /**
@@ -147,8 +151,8 @@ public class OpenApiDataObjectScanner {
      * @param primitive root to begin scan
      * @return the OAI schema
      */
-    public static Schema process(PrimitiveType primitive) {
-        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(primitive);
+    public static Schema process(OpenApiConfig openApiConfig, PrimitiveType primitive) {
+        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(openApiConfig, primitive);
         Schema primitiveSchema = new SchemaImpl();
         primitiveSchema.setType(typeFormat.getSchemaType());
         primitiveSchema.setFormat(typeFormat.getFormat().format());
@@ -222,7 +226,7 @@ public class OpenApiDataObjectScanner {
                 // Ignore static fields and fields annotated with ignore.
                 if (!Modifier.isStatic(field.flags()) && !ignoreResolver.isIgnore(field, currentPathEntry)) {
                     LOG.debugv("Iterating field {0}", field);
-                    AnnotationTargetProcessor.process(index, objectStack, resolver, currentPathEntry, field);
+                    AnnotationTargetProcessor.process(openApiConfig, index, objectStack, resolver, currentPathEntry, field);
                 }
             }
 
@@ -236,7 +240,7 @@ public class OpenApiDataObjectScanner {
         AnnotationInstance annotation = TypeUtil.getSchemaAnnotation(currentClass);
         if (annotation != null) {
             // Because of implementation= field, *may* return a new schema rather than modify.
-            return SchemaFactory.readSchema(index, currentSchema, annotation, Collections.emptyMap());
+            return SchemaFactory.readSchema(openApiConfig, index, currentSchema, annotation, Collections.emptyMap());
         }
         return currentSchema;
     }
@@ -247,7 +251,7 @@ public class OpenApiDataObjectScanner {
     }
 
     private Schema preProcessSpecial(Type type, TypeResolver typeResolver, DataObjectDeque.PathEntry currentPathEntry) {
-        return AnnotationTargetProcessor.process(index, objectStack, typeResolver, currentPathEntry, type);
+        return AnnotationTargetProcessor.process(openApiConfig, index, objectStack, typeResolver, currentPathEntry, type);
     }
 
     private boolean isA(Type testSubject, Type test) {
@@ -266,7 +270,7 @@ public class OpenApiDataObjectScanner {
             return true;
         }
 
-        TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(type);
+        TypeUtil.TypeWithFormat tf = TypeUtil.getTypeFormat(openApiConfig, type);
         // If is known type.
         return tf.getSchemaType() != Schema.SchemaType.OBJECT &&
                 tf.getSchemaType() != Schema.SchemaType.ARRAY;

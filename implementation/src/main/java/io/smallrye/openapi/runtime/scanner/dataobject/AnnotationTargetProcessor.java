@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.smallrye.openapi.api.OpenApiConfig;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -44,6 +45,7 @@ import io.smallrye.openapi.runtime.util.TypeUtil;
 public class AnnotationTargetProcessor implements RequirementHandler {
     private static final Logger LOG = Logger.getLogger(AnnotationTargetProcessor.class);
 
+    private final OpenApiConfig openApiConfig;
     private final AugmentedIndexView index;
     private final DataObjectDeque objectStack;
     private final DataObjectDeque.PathEntry parentPathEntry;
@@ -56,13 +58,15 @@ public class AnnotationTargetProcessor implements RequirementHandler {
     // May be null if field is unannotated.
     private AnnotationTarget annotationTarget;
 
-    public AnnotationTargetProcessor(AugmentedIndexView index,
-            DataObjectDeque objectStack,
-            DataObjectDeque.PathEntry parentPathEntry,
-            TypeResolver typeResolver,
-            AnnotationTarget annotationTarget,
-            String entityName,
-            Type entityType) {
+    public AnnotationTargetProcessor(OpenApiConfig openApiConfig,
+                                     AugmentedIndexView index,
+                                     DataObjectDeque objectStack,
+                                     DataObjectDeque.PathEntry parentPathEntry,
+                                     TypeResolver typeResolver,
+                                     AnnotationTarget annotationTarget,
+                                     String entityName,
+                                     Type entityType) {
+        this.openApiConfig = openApiConfig;
         this.index = index;
         this.objectStack = objectStack;
         this.parentPathEntry = parentPathEntry;
@@ -73,37 +77,41 @@ public class AnnotationTargetProcessor implements RequirementHandler {
         this.fieldSchema = new SchemaImpl();
     }
 
-    public AnnotationTargetProcessor(AugmentedIndexView index,
+    public AnnotationTargetProcessor(OpenApiConfig openApiConfig,
+            AugmentedIndexView index,
             DataObjectDeque objectStack,
             TypeResolver typeResolver,
             DataObjectDeque.PathEntry parentPathEntry,
             FieldInfo fieldInfo) {
-        this(index, objectStack, parentPathEntry, typeResolver, fieldInfo, fieldInfo.name(), fieldInfo.type());
+        this(openApiConfig, index, objectStack, parentPathEntry, typeResolver, fieldInfo, fieldInfo.name(), fieldInfo.type());
     }
 
-    public AnnotationTargetProcessor(AugmentedIndexView index,
+    public AnnotationTargetProcessor(OpenApiConfig openApiConfig,
+            AugmentedIndexView index,
             DataObjectDeque objectStack,
             TypeResolver typeResolver,
             DataObjectDeque.PathEntry parentPathEntry,
             Type type) {
-        this(index, objectStack, parentPathEntry, typeResolver, index.getClass(type), type.name().toString(), type);
+        this(openApiConfig, index, objectStack, parentPathEntry, typeResolver, index.getClass(type), type.name().toString(), type);
     }
 
-    public static Schema process(AugmentedIndexView index,
+    public static Schema process(OpenApiConfig openApiConfig,
+            AugmentedIndexView index,
             DataObjectDeque objectStack,
             TypeResolver typeResolver,
             DataObjectDeque.PathEntry parentPathEntry,
             FieldInfo field) {
-        AnnotationTargetProcessor fp = new AnnotationTargetProcessor(index, objectStack, typeResolver, parentPathEntry, field);
+        AnnotationTargetProcessor fp = new AnnotationTargetProcessor(openApiConfig, index, objectStack, typeResolver, parentPathEntry, field);
         return fp.processField();
     }
 
-    public static Schema process(AugmentedIndexView index,
+    public static Schema process(OpenApiConfig openApiConfig,
+            AugmentedIndexView index,
             DataObjectDeque objectStack,
             TypeResolver typeResolver,
             DataObjectDeque.PathEntry parentPathEntry,
             Type type) {
-        AnnotationTargetProcessor fp = new AnnotationTargetProcessor(index, objectStack, typeResolver, parentPathEntry, type);
+        AnnotationTargetProcessor fp = new AnnotationTargetProcessor(openApiConfig, index, objectStack, typeResolver, parentPathEntry, type);
         return fp.processField();
     }
 
@@ -184,33 +192,39 @@ public class AnnotationTargetProcessor implements RequirementHandler {
         }
 
         // Type could be replaced (e.g. generics).
-        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, entityType,
+        TypeProcessor typeProcessor = new TypeProcessor(openApiConfig, index, objectStack, parentPathEntry, typeResolver, entityType,
                 fieldSchema, annotationTarget);
 
         Type postProcessedField = typeProcessor.processType();
         fieldSchema = typeProcessor.getSchema();
 
         // TypeFormat pair contains mappings for Java <-> OAS types and formats.
-        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(postProcessedField);
+        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(openApiConfig, postProcessedField);
 
         // Provide inferred type and format if relevant.
         Map<String, Object> overrides = new HashMap<>();
         overrides.put(OpenApiConstants.PROP_TYPE, typeFormat.getSchemaType());
         overrides.put(OpenApiConstants.PROP_FORMAT, typeFormat.getFormat().format());
         // readSchema *may* replace the existing schema, so we must assign.
-        this.fieldSchema = SchemaFactory.readSchema(index, fieldSchema, annotation, overrides);
+        this.fieldSchema = SchemaFactory.readSchema(openApiConfig, index, fieldSchema, annotation, overrides);
     }
 
     private void readUnannotatedField() {
         LOG.debugv("Processing unannotated field {0}", entityType);
 
-        TypeProcessor typeProcessor = new TypeProcessor(index, objectStack, parentPathEntry, typeResolver, entityType,
-                fieldSchema, annotationTarget);
+        TypeProcessor typeProcessor = new TypeProcessor(openApiConfig,
+                index,
+                objectStack,
+                parentPathEntry,
+                typeResolver,
+                entityType,
+                fieldSchema,
+                annotationTarget);
 
         Type postProcessedField = typeProcessor.processType();
         fieldSchema = typeProcessor.getSchema();
 
-        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(postProcessedField);
+        TypeUtil.TypeWithFormat typeFormat = TypeUtil.getTypeFormat(openApiConfig,postProcessedField);
         fieldSchema.setType(typeFormat.getSchemaType());
 
         if (typeFormat.getFormat().hasFormat()) {

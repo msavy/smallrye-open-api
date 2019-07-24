@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import io.smallrye.openapi.api.OpenApiConfig;
 import org.eclipse.microprofile.openapi.models.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.models.media.Discriminator;
 import org.eclipse.microprofile.openapi.models.media.Schema;
@@ -42,11 +43,11 @@ public class SchemaFactory {
      * @param index
      * @param value
      */
-    public static Schema readSchema(IndexView index, AnnotationValue value) {
+    public static Schema readSchema(OpenApiConfig config, IndexView index, AnnotationValue value) {
         if (value == null) {
             return null;
         }
-        return readSchema(index, value.asNested());
+        return readSchema(config, index, value.asNested());
     }
 
     /**
@@ -55,7 +56,7 @@ public class SchemaFactory {
      * @param index
      * @param annotation
      */
-    public static Schema readSchema(IndexView index, AnnotationInstance annotation) {
+    public static Schema readSchema(OpenApiConfig config, IndexView index, AnnotationInstance annotation) {
         if (annotation == null) {
             return null;
         }
@@ -68,11 +69,12 @@ public class SchemaFactory {
             return null;
         }
 
-        return readSchema(index, new SchemaImpl(), annotation, Collections.emptyMap());
+        return readSchema(config, index, new SchemaImpl(), annotation, Collections.emptyMap());
     }
 
     @SuppressWarnings("unchecked")
-    public static Schema readSchema(IndexView index,
+    public static Schema readSchema(OpenApiConfig config,
+            IndexView index,
             Schema schema,
             AnnotationInstance annotation,
             Map<String, Object> overrides) {
@@ -88,13 +90,13 @@ public class SchemaFactory {
         }
 
         schema.setNot((Schema) overrides.getOrDefault(OpenApiConstants.PROP_NOT,
-                readClassSchema(index, annotation.value(OpenApiConstants.PROP_NOT), true)));
+                readClassSchema(config, index, annotation.value(OpenApiConstants.PROP_NOT), true)));
         schema.setOneOf((List<Schema>) overrides.getOrDefault(OpenApiConstants.PROP_ONE_OF,
-                readClassSchemas(index, annotation.value(OpenApiConstants.PROP_ONE_OF))));
+                readClassSchemas(config, index, annotation.value(OpenApiConstants.PROP_ONE_OF))));
         schema.setAnyOf((List<Schema>) overrides.getOrDefault(OpenApiConstants.PROP_ANY_OF,
-                readClassSchemas(index, annotation.value(OpenApiConstants.PROP_ANY_OF))));
+                readClassSchemas(config, index, annotation.value(OpenApiConstants.PROP_ANY_OF))));
         schema.setAllOf((List<Schema>) overrides.getOrDefault(OpenApiConstants.PROP_ALL_OF,
-                readClassSchemas(index, annotation.value(OpenApiConstants.PROP_ALL_OF))));
+                readClassSchemas(config, index, annotation.value(OpenApiConstants.PROP_ALL_OF))));
         schema.setTitle((String) overrides.getOrDefault(OpenApiConstants.PROP_TITLE,
                 JandexUtil.stringValue(annotation, OpenApiConstants.PROP_TITLE)));
         schema.setMultipleOf((BigDecimal) overrides.getOrDefault(OpenApiConstants.PROP_MULTIPLE_OF,
@@ -141,7 +143,7 @@ public class SchemaFactory {
         schema.setDefaultValue(overrides.getOrDefault(OpenApiConstants.PROP_DEFAULT_VALUE,
                 JandexUtil.stringValue(annotation, OpenApiConstants.PROP_DEFAULT_VALUE)));
         schema.setDiscriminator(
-                readDiscriminator(index, JandexUtil.stringValue(annotation, OpenApiConstants.PROP_DISCRIMINATOR_PROPERTY),
+                readDiscriminator(config, index, JandexUtil.stringValue(annotation, OpenApiConstants.PROP_DISCRIMINATOR_PROPERTY),
                         annotation.value(OpenApiConstants.PROP_DISCRIMINATOR_MAPPING)));
         schema.setMaxItems((Integer) overrides.getOrDefault(OpenApiConstants.PROP_MAX_ITEMS,
                 JandexUtil.intValue(annotation, OpenApiConstants.PROP_MAX_ITEMS)));
@@ -162,15 +164,15 @@ public class SchemaFactory {
         }
 
         if (JandexUtil.isSimpleClassSchema(annotation)) {
-            Schema implSchema = readClassSchema(index, annotation.value(OpenApiConstants.PROP_IMPLEMENTATION), true);
+            Schema implSchema = readClassSchema(config, index, annotation.value(OpenApiConstants.PROP_IMPLEMENTATION), true);
             schema = MergeUtil.mergeObjects(implSchema, schema);
         } else if (JandexUtil.isSimpleArraySchema(annotation)) {
-            Schema implSchema = readClassSchema(index, annotation.value(OpenApiConstants.PROP_IMPLEMENTATION), true);
+            Schema implSchema = readClassSchema(config, index, annotation.value(OpenApiConstants.PROP_IMPLEMENTATION), true);
             // If the @Schema annotation indicates an array type, then use the Schema
             // generated from the implementation Class as the "items" for the array.
             schema.setItems(implSchema);
         } else {
-            Schema implSchema = readClassSchema(index, annotation.value(OpenApiConstants.PROP_IMPLEMENTATION), false);
+            Schema implSchema = readClassSchema(config, index, annotation.value(OpenApiConstants.PROP_IMPLEMENTATION), false);
 
             if (schema.getType() == Schema.SchemaType.ARRAY && implSchema != null) {
                 // If the @Schema annotation indicates an array type, then use the Schema
@@ -195,12 +197,12 @@ public class SchemaFactory {
      * @param value annotation
      * @param schemaReferenceSupported
      */
-    public static Schema readClassSchema(IndexView index, AnnotationValue value, boolean schemaReferenceSupported) {
+    public static Schema readClassSchema(OpenApiConfig config, IndexView index, AnnotationValue value, boolean schemaReferenceSupported) {
         if (value == null) {
             return null;
         }
         ClassType ctype = (ClassType) value.asClass();
-        return introspectClassToSchema(index, ctype, schemaReferenceSupported);
+        return introspectClassToSchema(config, index, ctype, schemaReferenceSupported);
     }
 
     /**
@@ -210,15 +212,15 @@ public class SchemaFactory {
      * @param type
      * @param extensions
      */
-    public static Schema typeToSchema(IndexView index, Type type, List<AnnotationScannerExtension> extensions) {
+    public static Schema typeToSchema(OpenApiConfig config, IndexView index, Type type, List<AnnotationScannerExtension> extensions) {
         Schema schema = null;
         if (type.kind() == Type.Kind.CLASS) {
-            schema = introspectClassToSchema(index, type.asClassType(), true);
+            schema = introspectClassToSchema(config, index, type.asClassType(), true);
         } else if (type.kind() == Type.Kind.PRIMITIVE) {
-            schema = OpenApiDataObjectScanner.process(type.asPrimitiveType());
+            schema = OpenApiDataObjectScanner.process(config, type.asPrimitiveType());
         } else {
             Type asyncType = resolveAsyncType(type, extensions);
-            schema = OpenApiDataObjectScanner.process(index, asyncType);
+            schema = OpenApiDataObjectScanner.process(config, index, asyncType);
 
             if (schema != null && index.getClassByName(asyncType.name()) != null) {
                 SchemaRegistry schemaRegistry = SchemaRegistry.currentInstance();
@@ -237,7 +239,7 @@ public class SchemaFactory {
      * @param ctype
      * @param schemaReferenceSupported
      */
-    private static Schema introspectClassToSchema(IndexView index, ClassType ctype, boolean schemaReferenceSupported) {
+    private static Schema introspectClassToSchema(OpenApiConfig config, IndexView index, ClassType ctype, boolean schemaReferenceSupported) {
         if (ctype.name().equals(OpenApiConstants.DOTNAME_RESPONSE)) {
             return null;
         }
@@ -247,7 +249,7 @@ public class SchemaFactory {
         if (schemaReferenceSupported && schemaRegistry.has(ctype)) {
             return schemaRegistry.lookupRef(ctype);
         } else {
-            Schema schema = OpenApiDataObjectScanner.process(index, ctype);
+            Schema schema = OpenApiDataObjectScanner.process(config, index, ctype);
             if (schemaReferenceSupported && schema != null && index.getClassByName(ctype.name()) != null) {
                 return schemaRegistry.register(ctype, schema);
             } else {
@@ -262,7 +264,7 @@ public class SchemaFactory {
      * @param index the index of classes being scanned
      * @param value
      */
-    private static List<Schema> readClassSchemas(IndexView index, AnnotationValue value) {
+    private static List<Schema> readClassSchemas(OpenApiConfig config, IndexView index, AnnotationValue value) {
         if (value == null) {
             return null;
         }
@@ -271,7 +273,7 @@ public class SchemaFactory {
         List<Schema> schemas = new ArrayList<>(classArray.length);
         for (Type type : classArray) {
             ClassType ctype = (ClassType) type;
-            Schema schema = introspectClassToSchema(index, ctype, true);
+            Schema schema = introspectClassToSchema(config,index, ctype, true);
             schemas.add(schema);
         }
         return schemas;
@@ -306,7 +308,8 @@ public class SchemaFactory {
      *        given by {@link org.eclipse.microprofile.openapi.annotations.media.Schema#discriminatorMapping()
      *        discriminatorMapping}
      */
-    private static Discriminator readDiscriminator(IndexView index,
+    private static Discriminator readDiscriminator(OpenApiConfig config,
+            IndexView index,
             String propertyName,
             AnnotationValue annotation) {
 
@@ -336,7 +339,7 @@ public class SchemaFactory {
 
                 if (schemaValue != null) {
                     ClassType schemaType = schemaValue.asClass().asClassType();
-                    Schema schema = introspectClassToSchema(index, schemaType, true);
+                    Schema schema = introspectClassToSchema(config, index, schemaType, true);
                     schemaRef = schema != null ? schema.getRef() : null;
                 } else {
                     schemaRef = null;
