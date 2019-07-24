@@ -23,6 +23,10 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
+import io.smallrye.openapi.api.OpenApiConfig;
+import io.smallrye.openapi.api.OpenApiConfigImpl;
+import io.smallrye.openapi.api.OpenApiDocument;
+import io.smallrye.openapi.runtime.util.TypeUtil;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.DiscriminatorMapping;
@@ -40,6 +44,7 @@ public class DiscriminatorMappingTests extends IndexScannerTestBase {
 
     private static void test(String expectedResource, Class<?>... classes) throws IOException, JSONException {
         Index index = indexOf(classes);
+        OpenApiDocument.INSTANCE.config(emptyConfig());
         OpenApiAnnotationScanner scanner = new OpenApiAnnotationScanner(nestingSupportConfig(), index);
         OpenAPI result = scanner.scan();
         printToConsole(result);

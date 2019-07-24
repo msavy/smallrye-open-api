@@ -15,18 +15,9 @@
  */
 package io.smallrye.openapi.runtime.util;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
-import javax.validation.constraints.NotNull;
-
+import io.smallrye.openapi.api.OpenApiConfig;
+import io.smallrye.openapi.api.OpenApiConstants;
+import io.smallrye.openapi.api.OpenApiDocument;
 import org.eclipse.microprofile.openapi.models.media.Schema.SchemaType;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -36,16 +27,28 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodParameterInfo;
-import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.WildcardType;
+import org.jboss.logging.Logger;
 
-import io.smallrye.openapi.api.OpenApiConstants;
+import javax.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * @author Marc Savy {@literal <marc@rhymewithgravy.com>}
  */
 public class TypeUtil {
+
+    private static Logger LOG = Logger.getLogger(TypeUtil.class);
 
     private static final DotName DOTNAME_OBJECT = DotName.createSimple(Object.class.getName());
     private static final Type OBJECT_TYPE = Type.create(DOTNAME_OBJECT, Type.Kind.CLASS);
@@ -64,7 +67,7 @@ public class TypeUtil {
     // SPECIAL FORMATS
     private static final TypeWithFormat ARRAY_FORMAT = new TypeWithFormat(SchemaType.ARRAY, DataFormat.NONE);
     private static final TypeWithFormat OBJECT_FORMAT = new TypeWithFormat(SchemaType.OBJECT, DataFormat.NONE);
-    private static final TypeWithFormat DATE_FORMAT = new TypeWithFormat(SchemaType.STRING, DataFormat.DATE);
+    private static final TypeWithFormat DATE_FORMAT = new TypeWithFormat(SchemaType.STRING, DataFormat.DATE_TIME);
     private static final TypeWithFormat DATE_TIME_FORMAT = new TypeWithFormat(SchemaType.STRING, DataFormat.DATE_TIME);
 
     private static final Map<DotName, TypeWithFormat> TYPE_MAP = new LinkedHashMap<>();
@@ -107,21 +110,52 @@ public class TypeUtil {
         TYPE_MAP.put(DotName.createSimple(boolean.class.getName()), BOOLEAN_FORMAT);
 
         // Date
-        TYPE_MAP.put(DotName.createSimple(Date.class.getName()), DATE_FORMAT);
         TYPE_MAP.put(DotName.createSimple(java.sql.Date.class.getName()), DATE_FORMAT);
         TYPE_MAP.put(DotName.createSimple(java.time.LocalDate.class.getName()), DATE_FORMAT);
 
         // Date Time
+        TYPE_MAP.put(DotName.createSimple(Date.class.getName()), DATE_TIME_FORMAT);
         TYPE_MAP.put(DotName.createSimple(java.time.LocalDateTime.class.getName()), DATE_TIME_FORMAT);
         TYPE_MAP.put(DotName.createSimple(java.time.ZonedDateTime.class.getName()), DATE_TIME_FORMAT);
         TYPE_MAP.put(DotName.createSimple(java.time.OffsetDateTime.class.getName()), DATE_TIME_FORMAT);
     }
 
+    private static OpenApiConfig OPEN_API_CONFIG;
+
+    static {
+        OpenApiDocument.INSTANCE.registerConfigCallback((openApiConfig) -> TypeUtil.OPEN_API_CONFIG = openApiConfig);
+    }
+
     private TypeUtil() {
     }
 
-    public static TypeWithFormat getTypeFormat(PrimitiveType primitiveType) {
-        return TYPE_MAP.get(primitiveType.name());
+    private static TypeWithFormat getTypeFormat(DotName name) {
+        return TYPE_MAP.computeIfAbsent(name, k -> lookupUserConfigAndCache(name));
+    }
+
+    private static TypeWithFormat lookupUserConfigAndCache(DotName name) {
+        String customMapping = OPEN_API_CONFIG.customTypeMapping(name.toString());
+        // If there's no mapping in user config, return object.
+        // Cache result as MP Config documentation advises caching frequent lookups.
+        if (customMapping == null) {
+            TYPE_MAP.put(DotName.createSimple(name.toString()), OBJECT_FORMAT);
+            return OBJECT_FORMAT;
+        }
+
+        // Otherwise split assuming "SchemaType,Format" (i.e. comma separated)
+        String[] split = customMapping.split(",");
+        if (split.length != 2) {
+            LOG.warnf("Custom OpenAPI type-format mapping has invalid config format: {}", customMapping);
+            return null;
+        }
+
+        SchemaType schemaType = SchemaType.valueOf(split[0].toUpperCase(Locale.ENGLISH));
+        DataFormat format = DataFormat.fromString(split[1]);
+        TypeWithFormat twf = new TypeWithFormat(schemaType, format);
+
+        // Cache valid lookups also.
+        TYPE_MAP.put(name, twf);
+        return twf;
     }
 
     // TODO: consider additional checks for Number interface?
@@ -129,8 +163,8 @@ public class TypeUtil {
         if (classType.kind() == Type.Kind.ARRAY) {
             return arrayFormat();
         } else {
-            return Optional
-                    .ofNullable(TYPE_MAP.get(getName(classType))) // TODO we could fall back onto tests for interfaces such as CharSequence.
+            DotName klazzTypeName = getName(classType);
+            return Optional.ofNullable(getTypeFormat(klazzTypeName)) // TODO we could fall back onto tests for interfaces such as CharSequence.
                     // Otherwise it's some object without a well-known format mapping
                     .orElse(objectFormat());
         }
@@ -344,6 +378,15 @@ public class TypeUtil {
 
         public boolean hasFormat() {
             return this != NONE;
+        }
+
+        public static DataFormat fromString(String in) {
+            for(DataFormat df: DataFormat.values()) {
+                if (df.format().equalsIgnoreCase(in)) {
+                    return df;
+                }
+            }
+            throw new IllegalArgumentException("No such OAI data type " + in);
         }
     }
 

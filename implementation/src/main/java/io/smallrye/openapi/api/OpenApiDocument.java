@@ -25,6 +25,11 @@ import io.smallrye.openapi.api.util.FilterUtil;
 import io.smallrye.openapi.api.util.MergeUtil;
 import io.smallrye.openapi.api.util.ServersUtil;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Callable;
+import java.util.function.Consumer;
+
 /**
  * Holds the final OpenAPI document produced during the startup of the app.
  *
@@ -47,8 +52,17 @@ public class OpenApiDocument {
     private transient String archiveName;
 
     private transient OpenAPI model;
+    private transient Deque<Consumer<OpenApiConfig>> configCallbacks = new ArrayDeque<>();
 
     private OpenApiDocument() {
+    }
+
+    public void registerConfigCallback(Consumer<OpenApiConfig> configCallback) {
+        if (config != null) {
+            configCallback.accept(config);
+        } else {
+            this.configCallbacks.push(configCallback);
+        }
     }
 
     /**
@@ -96,7 +110,13 @@ public class OpenApiDocument {
     }
 
     public synchronized void config(OpenApiConfig config) {
-        set(() -> this.config = config);
+        set(() -> {
+            this.config = config;
+            while (!configCallbacks.isEmpty()) {
+                Consumer<OpenApiConfig> callback = configCallbacks.pop();
+                callback.accept(config);
+            }
+        });
     }
 
     public void modelFromAnnotations(OpenAPI model) {

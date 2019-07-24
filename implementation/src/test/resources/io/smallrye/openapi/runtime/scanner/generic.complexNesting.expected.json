@@ -29,15 +29,15 @@
                 "type" : "object",
                 "properties" : {
                   "qAgain" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "type" : "string"
                   },
                   "qAgain3" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "type" : "string"
                   },
                   "qValue" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "description" : "Ah, Q, my favourite variable!",
                     "type" : "string"
                   },
@@ -66,15 +66,15 @@
                 "type" : "object",
                 "properties" : {
                   "qAgain" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "type" : "string"
                   },
                   "qAgain3" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "type" : "string"
                   },
                   "qValue" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "description" : "Ah, Q, my favourite variable!",
                     "type" : "string"
                   },
@@ -103,15 +103,15 @@
                 "type" : "object",
                 "properties" : {
                   "qAgain" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "type" : "string"
                   },
                   "qAgain3" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "type" : "string"
                   },
                   "qValue" : {
-                    "format" : "date",
+                    "format" : "date-time",
                     "description" : "Ah, Q, my favourite variable!",
                     "type" : "string"
                   },
